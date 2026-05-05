@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env*.local
+.env
+.DS_Store
+*.log
+.vercel
+.supabase
+samples/
+
+# Claude Code — paramètres locaux (permissions accordées localement)
+.claude/settings.local.json
