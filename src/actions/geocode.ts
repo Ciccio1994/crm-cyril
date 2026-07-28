@@ -32,9 +32,13 @@ export async function chercherLieux(
   sessionToken: string,
 ): Promise<ActionResult<SuggestionLieu[]>> {
   const q = query.trim()
+  console.log('[chercherLieux] query:', q, '| KEY exists:', !!process.env.GOOGLE_MAPS_API_KEY)
   if (q.length < 3) return { data: [] }
   const key = apiKey()
-  if (!key) return { erreur: 'GOOGLE_MAPS_API_KEY manquante' }
+  if (!key) {
+    console.log('[chercherLieux] GOOGLE_MAPS_API_KEY manquante côté serveur')
+    return { erreur: 'GOOGLE_MAPS_API_KEY manquante' }
+  }
 
   try {
     const res = await fetch(AUTOCOMPLETE_URL, {
@@ -51,15 +55,20 @@ export async function chercherLieux(
       }),
       cache: 'no-store',
     })
+    console.log('[chercherLieux] Google status:', res.status)
+    const rawText = await res.text()
+    console.log('[chercherLieux] Google body (truncated 500):', rawText.slice(0, 500))
     if (!res.ok) {
-      return { erreur: `Google Places ${res.status}` }
+      return { erreur: `Google Places ${res.status}: ${rawText.slice(0, 200)}` }
     }
-    const json = (await res.json()) as { suggestions?: unknown[] }
+    const json = JSON.parse(rawText) as { suggestions?: unknown[] }
     const suggestions = (json.suggestions ?? [])
       .map(parseAutocompleteSuggestion)
       .filter((s): s is SuggestionLieu => s !== null)
+    console.log('[chercherLieux] suggestions parsed:', suggestions.length)
     return { data: suggestions }
   } catch (e) {
+    console.log('[chercherLieux] fetch error:', e instanceof Error ? e.message : e)
     return { erreur: e instanceof Error ? e.message : 'Erreur inconnue' }
   }
 }
