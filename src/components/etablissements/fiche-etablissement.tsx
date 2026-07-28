@@ -15,6 +15,7 @@ import { calculerRetard } from '@/lib/retard'
 import { cn } from '@/lib/utils'
 import { OngletContacts } from '@/components/contacts/onglet-contacts'
 import { OngletVisites } from '@/components/visites/onglet-visites'
+import { ActionsRapides } from './actions-rapides'
 import type {
   Contact,
   Etablissement,
@@ -106,6 +107,8 @@ export function FicheEtablissement({
           </Link>
         </div>
       </header>
+
+      <ActionsRapides etab={etablissement} />
 
       <Tabs defaultValue="info" className="px-4 pt-4">
         <TabsList className="w-full">
