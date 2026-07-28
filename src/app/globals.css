@@ -128,3 +128,13 @@
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  .safe-top    { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .tap-target  { min-height: 44px; min-width: 44px; }
+}
+
+html, body {
+  overscroll-behavior-y: none;
+}
