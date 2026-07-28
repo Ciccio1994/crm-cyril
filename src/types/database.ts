@@ -57,6 +57,7 @@ export interface Entreprise {
 export interface Etablissement {
   id: string
   enseigne: string
+  code_schenk: string | null
   type_etablissement: TypeEtablissement | null
   statut: StatutCommercial
   groupe_prix: GroupePrix | null

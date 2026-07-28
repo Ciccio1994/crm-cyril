@@ -6,10 +6,26 @@ import { normaliserHeader } from '@/lib/excel/normaliser'
 import { mapperTournee } from '@/lib/excel/tournee-matcher'
 import { splitContactName } from '@/lib/contact-picker'
 
+// -----------------------------------------------------------------------------
+// Détection onglets « sans tournée » (import valide, tournee_id=NULL)
+// -----------------------------------------------------------------------------
+function estOngletSansTournee(nom: string): boolean {
+  const n = nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  if (n === 'prospects') return true
+  if (n.startsWith('0.') && n.includes('autres')) return true
+  if (n === 'autres') return true
+  return false
+}
+
+// -----------------------------------------------------------------------------
+// previewImport
+// -----------------------------------------------------------------------------
+
 export interface OngletPreview {
   nomOnglet: string
   tourneeId: string | null
   tourneeDb: string | null
+  sansTournee: boolean          // true = onglet special (Prospects/Autres) importable sans tournée
   motifNonAssociee?: string
   nbLignes: number
   colonnesInconnues: string[]
@@ -46,9 +62,10 @@ export async function previewImport(
 
   let totalLignes = 0
   const previews: OngletPreview[] = onglets.map((o) => {
-    const match = mapperTournee(o.nomOnglet, candidats)
+    const sansTournee = estOngletSansTournee(o.nomOnglet)
+    const match = sansTournee ? null : mapperTournee(o.nomOnglet, candidats)
     totalLignes += o.lignes.length
-    if (!match) {
+    if (!match && !sansTournee) {
       console.log(
         `[previewImport] Onglet "${o.nomOnglet}" non mappé — tournées disponibles :`,
         nomsCandidats,
@@ -58,7 +75,8 @@ export async function previewImport(
       nomOnglet: o.nomOnglet,
       tourneeId: match?.id ?? null,
       tourneeDb: match?.nom ?? null,
-      motifNonAssociee: match
+      sansTournee,
+      motifNonAssociee: match || sansTournee
         ? undefined
         : `Onglet "${o.nomOnglet}" — aucune tournée BDD correspondante`,
       nbLignes: o.lignes.length,
@@ -71,11 +89,11 @@ export async function previewImport(
 }
 
 // -----------------------------------------------------------------------------
-// importerBatch — insère/met à jour établissements + contacts principaux
+// importerBatch — établissements + contacts (dédup code_schenk puis enseigne+cp+tournée)
 // -----------------------------------------------------------------------------
 
 export interface LigneAImporter {
-  tourneeId: string
+  tourneeId: string | null       // null = onglet Prospects/Autres (import sans tournée)
   numeroLigneExcel: number
   nomOnglet: string
   payload: PayloadImport
@@ -128,42 +146,63 @@ export async function importerBatch(
 
   const supabase = await createClient()
 
+  // Étape 1a : index établissements existants par code_schenk (priorité dédup #1)
+  const codesSchenk = Array.from(
+    new Set(
+      lignes
+        .map((l) => l.payload.code_schenk)
+        .filter((c): c is string => c !== null && c !== ''),
+    ),
+  )
+  const indexBySchenk = new Map<string, string>()
+  if (codesSchenk.length > 0) {
+    const { data: existantsBySchenk, error: errS } = await supabase
+      .from('etablissement')
+      .select('id, code_schenk')
+      .is('deleted_at', null)
+      .in('code_schenk', codesSchenk)
+    if (errS) return { erreur: `Erreur lecture etabs (schenk) : ${errS.message}` }
+    for (const e of existantsBySchenk ?? []) {
+      if (e.code_schenk) indexBySchenk.set(e.code_schenk, e.id)
+    }
+  }
+
+  // Étape 1b : index établissements existants par (tournée + enseigne + cp) (priorité dédup #2)
+  //           Seulement pour les lignes qui n'ont pas de code_schenk.
   const tourneeIds = Array.from(
-    new Set(lignes.map((l) => l.tourneeId).filter(Boolean)),
+    new Set(
+      lignes
+        .map((l) => l.tourneeId)
+        .filter((t): t is string => t !== null && t !== ''),
+    ),
   )
-  if (tourneeIds.length === 0) {
-    rapport.etablissements.ignores = lignes.length
-    return { data: rapport }
+  const indexByEnseigne = new Map<string, string>()
+  const etabIdsPossibles = new Set<string>(indexBySchenk.values())
+  if (tourneeIds.length > 0) {
+    const { data: existants, error: errE } = await supabase
+      .from('etablissement')
+      .select('id, enseigne, code_postal, tournee_id')
+      .is('deleted_at', null)
+      .in('tournee_id', tourneeIds)
+    if (errE) return { erreur: `Erreur lecture etabs : ${errE.message}` }
+    for (const e of existants ?? []) {
+      indexByEnseigne.set(
+        `${e.tournee_id}::${cleDedup(e.enseigne, e.code_postal)}`,
+        e.id,
+      )
+      etabIdsPossibles.add(e.id)
+    }
   }
 
-  // Étape 1 : index établissements existants
-  const { data: existantsEtabs, error: errE } = await supabase
-    .from('etablissement')
-    .select('id, enseigne, code_postal, tournee_id')
-    .is('deleted_at', null)
-    .in('tournee_id', tourneeIds)
-  if (errE) return { erreur: `Erreur lecture etabs : ${errE.message}` }
-
-  const indexEtab = new Map<string, string>()
-  for (const e of existantsEtabs ?? []) {
-    indexEtab.set(
-      `${e.tournee_id}::${cleDedup(e.enseigne, e.code_postal)}`,
-      e.id,
-    )
-  }
-
-  // Étape 2 : index contacts existants (uniquement pour les etabs existants —
-  //           les etabs qu'on va créer n'ont par définition aucun contact)
-  const etabIdsConnus = Array.from(
-    new Set((existantsEtabs ?? []).map((e) => e.id)),
-  )
+  // Étape 2 : index contacts existants pour tous les etabs identifiés
   const indexContact = new Map<string, string>()
-  if (etabIdsConnus.length > 0) {
+  const etabIdsList = Array.from(etabIdsPossibles)
+  if (etabIdsList.length > 0) {
     const { data: existantsContacts, error: errC } = await supabase
       .from('contact')
       .select('id, etablissement_id, nom')
       .is('deleted_at', null)
-      .in('etablissement_id', etabIdsConnus)
+      .in('etablissement_id', etabIdsList)
     if (errC) return { erreur: `Erreur lecture contacts : ${errC.message}` }
     for (const c of existantsContacts ?? []) {
       indexContact.set(
@@ -173,24 +212,32 @@ export async function importerBatch(
     }
   }
 
-  // Étape 3 : traitement ligne par ligne (etab d'abord, puis contact)
+  // Étape 3 : traitement ligne par ligne
   for (const l of lignes) {
-    if (!l.tourneeId) {
-      rapport.etablissements.ignores++
-      continue
+    // Dédup #1 : code_schenk
+    let etabId: string | null = null
+    if (l.payload.code_schenk) {
+      etabId = indexBySchenk.get(l.payload.code_schenk) ?? null
     }
-    const cleEtab = `${l.tourneeId}::${cleDedup(l.payload.enseigne, l.payload.code_postal)}`
-    let etabId: string | null = indexEtab.get(cleEtab) ?? null
+    // Dédup #2 : enseigne + cp + tournée (uniquement si tournée définie)
+    let cleEnseigne: string | null = null
+    if (!etabId && l.tourneeId) {
+      cleEnseigne = `${l.tourneeId}::${cleDedup(l.payload.enseigne, l.payload.code_postal)}`
+      etabId = indexByEnseigne.get(cleEnseigne) ?? null
+    }
 
     const dbPayloadEtab = {
       enseigne:            l.payload.enseigne,
+      code_schenk:         l.payload.code_schenk,
       statut:              l.payload.statut,
       adresse_ligne_1:     l.payload.adresse_ligne_1,
       code_postal:         l.payload.code_postal,
       ville:               l.payload.ville,
       telephone_principal: l.payload.telephone_principal,
+      telephone_mobile:    l.payload.telephone_mobile,
       email:               l.payload.email,
       groupe_prix:         l.payload.groupe_prix,
+      notes_internes:      l.payload.notes_internes,
       tournee_id:          l.tourneeId,
     }
 
@@ -210,7 +257,8 @@ export async function importerBatch(
           .single()
         if (insErr || !newE) throw new Error(`etab insert: ${insErr?.message ?? 'no data'}`)
         etabId = newE.id as string
-        indexEtab.set(cleEtab, etabId)
+        if (l.payload.code_schenk) indexBySchenk.set(l.payload.code_schenk, etabId)
+        if (cleEnseigne) indexByEnseigne.set(cleEnseigne, etabId)
         rapport.etablissements.crees++
       }
     } catch (e) {
@@ -257,4 +305,28 @@ export async function importerBatch(
   }
 
   return { data: rapport }
+}
+
+// -----------------------------------------------------------------------------
+// reinitialiserImport — WIPE etablissement (contacts + visites cascade)
+// Tournées PRÉSERVÉES : la table `tournee` n'est jamais touchée par cette action.
+// -----------------------------------------------------------------------------
+
+export async function reinitialiserImport(): Promise<ActionResult<{ supprimes: number }>> {
+  const supabase = await createClient()
+
+  // Compte pour le rapport
+  const { count } = await supabase
+    .from('etablissement')
+    .select('*', { count: 'exact', head: true })
+
+  // DELETE avec filtre trivial pour matcher toutes les lignes
+  // (Supabase interdit .delete() sans filtre par sécurité)
+  const { error } = await supabase
+    .from('etablissement')
+    .delete()
+    .gt('created_at', '1900-01-01T00:00:00Z')
+
+  if (error) return { erreur: `Erreur reset : ${error.message}` }
+  return { data: { supprimes: count ?? 0 } }
 }

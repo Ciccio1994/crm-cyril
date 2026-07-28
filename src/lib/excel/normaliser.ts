@@ -4,6 +4,8 @@ const GROUPES_VALIDES: GroupePrix[] = [
   'HORECA', 'PART', 'EPI', 'REVENDEURS', 'NEG', 'HORECASRB', 'HELICO',
 ]
 
+// Retire lowercase + accents + symboles fréquents dans les headers (° · () etc.)
+// pour rendre le matching robuste (« N° téléphone » → « n telephone »).
 export function normaliserHeader(v: string | null | undefined): string {
   if (!v) return ''
   return v
@@ -11,6 +13,7 @@ export function normaliserHeader(v: string | null | undefined): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
+    .replace(/[°()·]/g, '')
     .trim()
     .replace(/\s+/g, ' ')
 }

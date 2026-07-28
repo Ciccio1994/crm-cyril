@@ -1,12 +1,13 @@
 'use client'
 
-import { useCallback, useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   previewImport,
   importerBatch,
+  reinitialiserImport,
   type PreviewImport,
   type LigneAImporter,
   type RapportImport,
@@ -14,6 +15,7 @@ import {
 
 type Etape = 'idle' | 'uploading' | 'preview' | 'importing' | 'done'
 const TAILLE_BATCH = 30
+const CONFIRM_TIMEOUT_MS = 5000
 
 export function ImporterExcel() {
   const [etape, setEtape] = useState<Etape>('idle')
@@ -23,6 +25,16 @@ export function ImporterExcel() {
   const [progressionActuelle, setProgressionActuelle] = useState(0)
   const [progressionTotal, setProgressionTotal] = useState(0)
   const [rapport, setRapport] = useState<RapportImport | null>(null)
+
+  // État du bouton "Réinitialiser" : idle → armed (5s) → confirmed (delete)
+  const [resetState, setResetState] = useState<'idle' | 'armed' | 'busy'>('idle')
+  const [resetMessage, setResetMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (resetState !== 'armed') return
+    const t = setTimeout(() => setResetState('idle'), CONFIRM_TIMEOUT_MS)
+    return () => clearTimeout(t)
+  }, [resetState])
 
   const onFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,10 +70,11 @@ export function ImporterExcel() {
 
   async function lancerImport() {
     if (!preview) return
+    // Onglet importable : tourneeId défini OU sansTournee (Prospects/Autres)
     const aImporter: LigneAImporter[] = preview.onglets.flatMap((o) =>
-      o.tourneeId
+      o.tourneeId || o.sansTournee
         ? o.lignes.map((l) => ({
-            tourneeId: o.tourneeId!,
+            tourneeId: o.tourneeId,
             numeroLigneExcel: l.numeroLigneExcel,
             nomOnglet: o.nomOnglet,
             payload: l.payload,
@@ -101,6 +114,27 @@ export function ImporterExcel() {
     setEtape('done')
   }
 
+  async function onResetClick() {
+    setResetMessage(null)
+    if (resetState === 'idle') {
+      setResetState('armed')
+      return
+    }
+    if (resetState === 'armed') {
+      setResetState('busy')
+      const r = await reinitialiserImport()
+      if (r.erreur) {
+        setResetMessage(`Erreur : ${r.erreur}`)
+      } else {
+        setResetMessage(
+          `${r.data?.supprimes ?? 0} établissement(s) supprimés (contacts + visites cascade). Tournées préservées.`,
+        )
+        reset()
+      }
+      setResetState('idle')
+    }
+  }
+
   const pct =
     progressionTotal > 0
       ? Math.round((progressionActuelle / progressionTotal) * 100)
@@ -111,8 +145,9 @@ export function ImporterExcel() {
       <header>
         <h1 className="text-xl font-semibold">Import Excel Schenk</h1>
         <p className="text-sm text-muted-foreground">
-          Chaque onglet = une tournée. Les doublons sont fusionnés par
-          enseigne + code postal + tournée.
+          Chaque onglet = une tournée. Dédup par code Schenk (N°), sinon par
+          enseigne + code postal + tournée. Onglets « Prospects » / « 0. Autres »
+          sont importés sans tournée.
         </p>
       </header>
 
@@ -149,35 +184,40 @@ export function ImporterExcel() {
             </Button>
           </div>
           <ul className="divide-y">
-            {preview.onglets.map((o) => (
-              <li key={o.nomOnglet} className="py-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{o.nomOnglet}</p>
-                    <p className="text-xs text-muted-foreground">
-                      → {o.tourneeDb ?? 'aucune tournée associée'}
-                    </p>
-                    {o.colonnesInconnues.length > 0 && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        Colonnes ignorées : {o.colonnesInconnues.join(', ')}
+            {preview.onglets.map((o) => {
+              const importable = o.tourneeId || o.sansTournee
+              return (
+                <li key={o.nomOnglet} className="py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{o.nomOnglet}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {o.sansTournee
+                          ? '→ Sans tournée (Prospects/Autres)'
+                          : `→ ${o.tourneeDb ?? 'aucune tournée associée'}`}
                       </p>
+                      {o.colonnesInconnues.length > 0 && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Colonnes ignorées : {o.colonnesInconnues.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                    {importable ? (
+                      <Badge variant="secondary">{o.nbLignes} lignes</Badge>
+                    ) : (
+                      <Badge variant="destructive">Ignoré</Badge>
                     )}
                   </div>
-                  {o.tourneeId ? (
-                    <Badge variant="secondary">{o.nbLignes} lignes</Badge>
-                  ) : (
-                    <Badge variant="destructive">Ignoré</Badge>
-                  )}
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
           <Button
             type="button"
             onClick={lancerImport}
             className="mt-4 h-12 w-full text-base"
           >
-            Lancer l&apos;import de {preview.totalLignes} lignes
+            Lancer l&apos;import
           </Button>
         </Card>
       )}
@@ -255,6 +295,29 @@ export function ImporterExcel() {
           </Button>
         </Card>
       )}
+
+      {/* Zone dangereuse : réinitialisation complète des imports */}
+      <div className="mt-8 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+        <h3 className="text-sm font-semibold">Zone dangereuse</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Supprime TOUS les établissements, contacts et visites. Les tournées
+          BDD (18) sont préservées. Double-clic requis pour confirmer.
+        </p>
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={onResetClick}
+          disabled={resetState === 'busy'}
+          className="mt-3 h-12 w-full text-base"
+        >
+          {resetState === 'idle' && 'Réinitialiser tous les imports'}
+          {resetState === 'armed' && '⚠️  Cliquer à nouveau pour confirmer'}
+          {resetState === 'busy' && 'Suppression en cours…'}
+        </Button>
+        {resetMessage && (
+          <p className="mt-2 text-xs text-muted-foreground">{resetMessage}</p>
+        )}
+      </div>
     </div>
   )
 }

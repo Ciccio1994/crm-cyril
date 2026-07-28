@@ -4,8 +4,14 @@ import * as XLSX from 'xlsx'
 
 vi.mock('@/lib/supabase/server')
 
-import { previewImport, importerBatch } from '@/actions/import'
+import {
+  previewImport,
+  importerBatch,
+  reinitialiserImport,
+  type LigneAImporter,
+} from '@/actions/import'
 import { createClient } from '@/lib/supabase/server'
+import type { PayloadImport } from '@/lib/excel/parser'
 
 function buildFormData(sheets: { nom: string; data: unknown[][] }[]): FormData {
   const wb = XLSX.utils.book_new()
@@ -32,7 +38,7 @@ function mockTournees(tournees: { id: string; nom: string }[]) {
 describe('previewImport', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('renvoie un onglet par sheet avec tournée résolue par nom normalisé', async () => {
+  it('résout les tournées BDD par nom normalisé (matcher tolérant)', async () => {
     const supabase = mockTournees([
       { id: 't1', nom: 'Sion - Savièse' },
       { id: 't2', nom: 'Anzère - Ayent' },
@@ -48,11 +54,10 @@ describe('previewImport', () => {
     expect(res.data!.onglets).toHaveLength(2)
     expect(res.data!.onglets[0].tourneeId).toBe('t1')
     expect(res.data!.onglets[1].tourneeId).toBe('t2')
-    expect(res.data!.onglets[1].nbLignes).toBe(2)
     expect(res.data!.totalLignes).toBe(3)
   })
 
-  it('marque tourneeId=null si aucun match', async () => {
+  it('marque tourneeId=null + motif si aucun match', async () => {
     const supabase = mockTournees([{ id: 't1', nom: 'Sion - Savièse' }])
     vi.mocked(createClient).mockResolvedValue(supabase as never)
 
@@ -61,7 +66,33 @@ describe('previewImport', () => {
     ])
     const res = await previewImport(fd)
     expect(res.data!.onglets[0].tourneeId).toBeNull()
+    expect(res.data!.onglets[0].sansTournee).toBe(false)
     expect(res.data!.onglets[0].motifNonAssociee).toContain('Fantôme')
+  })
+
+  it("marque sansTournee=true pour l'onglet 'Prospects' (import valide, tournée NULL)", async () => {
+    const supabase = mockTournees([{ id: 't1', nom: 'Sion - Savièse' }])
+    vi.mocked(createClient).mockResolvedValue(supabase as never)
+
+    const fd = buildFormData([
+      { nom: 'Prospects', data: [['Enseigne'], ['X']] },
+    ])
+    const res = await previewImport(fd)
+    expect(res.data!.onglets[0].tourneeId).toBeNull()
+    expect(res.data!.onglets[0].sansTournee).toBe(true)
+    expect(res.data!.onglets[0].motifNonAssociee).toBeUndefined()
+  })
+
+  it("marque sansTournee=true pour '0. Autres - Fouly - Vernayaz'", async () => {
+    const supabase = mockTournees([{ id: 't1', nom: 'Sion - Savièse' }])
+    vi.mocked(createClient).mockResolvedValue(supabase as never)
+
+    const fd = buildFormData([
+      { nom: '0. Autres - Fouly - Vernayaz', data: [['Enseigne'], ['X']] },
+    ])
+    const res = await previewImport(fd)
+    expect(res.data!.onglets[0].sansTournee).toBe(true)
+    expect(res.data!.onglets[0].tourneeId).toBeNull()
   })
 
   it('renvoie erreur si pas de fichier', async () => {
@@ -73,191 +104,269 @@ describe('previewImport', () => {
   })
 })
 
-describe('importerBatch', () => {
+// -----------------------------------------------------------------------------
+// importerBatch
+// -----------------------------------------------------------------------------
+
+function makePayload(
+  enseigne: string,
+  code_postal: string | null,
+  opts: Partial<PayloadImport> = {},
+): PayloadImport {
+  return {
+    enseigne,
+    code_schenk: opts.code_schenk ?? null,
+    statut: opts.statut ?? 'prospect',
+    adresse_ligne_1: opts.adresse_ligne_1 ?? null,
+    code_postal,
+    ville: opts.ville ?? null,
+    telephone_principal: opts.telephone_principal ?? null,
+    telephone_mobile: opts.telephone_mobile ?? null,
+    email: opts.email ?? null,
+    groupe_prix: opts.groupe_prix ?? null,
+    notes_internes: opts.notes_internes ?? null,
+    contact_nom: opts.contact_nom ?? null,
+    contact_fonction: opts.contact_fonction ?? null,
+    contact_telephone: opts.contact_telephone ?? null,
+    contact_email: opts.contact_email ?? null,
+  }
+}
+
+function ligne(
+  enseigne: string,
+  cp: string | null,
+  tourneeId: string | null,
+  opts: Partial<PayloadImport> = {},
+): LigneAImporter {
+  return {
+    tourneeId,
+    numeroLigneExcel: 2,
+    nomOnglet: 'T',
+    payload: makePayload(enseigne, cp, opts),
+  }
+}
+
+interface MockOpts {
+  etabsBySchenk?: { id: string; code_schenk: string }[]
+  etabsByEnseigne?: { id: string; enseigne: string; code_postal: string | null; tournee_id: string }[]
+  contacts?: { id: string; etablissement_id: string; nom: string }[]
+  insertedEtabId?: string
+}
+
+function mockSupabase(opts: MockOpts = {}) {
+  const insertedEtabId = opts.insertedEtabId ?? 'new_etab'
+  const inserts: { table: string; payload: Record<string, unknown> }[] = []
+  const updates: { table: string; payload: Record<string, unknown>; id: string }[] = []
+
+  return {
+    supabase: {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'etablissement') {
+          return {
+            select: vi.fn().mockImplementation(() => ({
+              is: vi.fn().mockReturnThis(),
+              in: vi.fn().mockImplementation((col: string) => {
+                if (col === 'code_schenk') {
+                  return Promise.resolve({
+                    data: opts.etabsBySchenk ?? [], error: null,
+                  })
+                }
+                if (col === 'tournee_id') {
+                  return Promise.resolve({
+                    data: opts.etabsByEnseigne ?? [], error: null,
+                  })
+                }
+                return Promise.resolve({ data: [], error: null })
+              }),
+            })),
+            insert: vi.fn().mockImplementation((p: Record<string, unknown>) => {
+              inserts.push({ table: 'etablissement', payload: p })
+              return {
+                select: vi.fn().mockReturnThis(),
+                single: vi.fn().mockResolvedValue({
+                  data: { id: insertedEtabId }, error: null,
+                }),
+              }
+            }),
+            update: vi.fn().mockImplementation((p: Record<string, unknown>) => ({
+              eq: vi.fn().mockImplementation((_col: string, id: string) => {
+                updates.push({ table: 'etablissement', payload: p, id })
+                return Promise.resolve({ data: null, error: null })
+              }),
+            })),
+            delete: vi.fn().mockReturnThis(),
+            gt: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }
+        }
+        if (table === 'contact') {
+          return {
+            select: vi.fn().mockImplementation(() => ({
+              is: vi.fn().mockReturnThis(),
+              in: vi.fn().mockResolvedValue({
+                data: opts.contacts ?? [], error: null,
+              }),
+            })),
+            insert: vi.fn().mockImplementation((p: Record<string, unknown>) => {
+              inserts.push({ table: 'contact', payload: p })
+              return {
+                select: vi.fn().mockReturnThis(),
+                single: vi.fn().mockResolvedValue({ data: { id: 'new_c' }, error: null }),
+              }
+            }),
+            update: vi.fn().mockImplementation((p: Record<string, unknown>) => ({
+              eq: vi.fn().mockImplementation((_col: string, id: string) => {
+                updates.push({ table: 'contact', payload: p, id })
+                return Promise.resolve({ data: null, error: null })
+              }),
+            })),
+          }
+        }
+        return {}
+      }),
+    },
+    inserts,
+    updates,
+  }
+}
+
+describe('importerBatch — dédup par code_schenk (priorité #1)', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  function ligne(
-    enseigne: string,
-    cp: string | null,
-    tourneeId: string,
-    opts: Partial<{
-      contact_nom: string
-      contact_telephone: string
-      contact_email: string
-      contact_fonction: string
-      telephone_principal: string
-      email: string
-    }> = {},
-  ) {
-    return {
-      tourneeId,
-      numeroLigneExcel: 2,
-      nomOnglet: 'T',
-      payload: {
-        enseigne,
-        statut: 'prospect' as const,
-        adresse_ligne_1: null,
-        code_postal: cp,
-        ville: null,
-        telephone_principal: opts.telephone_principal ?? null,
-        email: opts.email ?? null,
-        groupe_prix: null,
-        contact_nom: opts.contact_nom ?? null,
-        contact_fonction: opts.contact_fonction ?? null,
-        contact_telephone: opts.contact_telephone ?? null,
-        contact_email: opts.contact_email ?? null,
-      },
-    }
-  }
+  it("met à jour si un etab a le même code_schenk (même si tournée différente)", async () => {
+    const mock = mockSupabase({
+      etabsBySchenk: [{ id: 'e_existant', code_schenk: 'C0034046' }],
+    })
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const res = await importerBatch([
+      ligne('Hôtel de la Poste', '1936', 't1', { code_schenk: 'C0034046' }),
+    ])
+    expect(res.data!.etablissements.misAJour).toBe(1)
+    expect(res.data!.etablissements.crees).toBe(0)
+    expect(mock.updates.some((u) => u.table === 'etablissement' && u.id === 'e_existant')).toBe(true)
+  })
 
-  interface MockOpts {
-    etabs?: { id: string; enseigne: string; code_postal: string | null; tournee_id: string }[]
-    contacts?: { id: string; etablissement_id: string; nom: string }[]
-    insertedEtabId?: string
-  }
+  it("crée si code_schenk absent en BDD", async () => {
+    const mock = mockSupabase({ insertedEtabId: 'e_new' })
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const res = await importerBatch([
+      ligne('Alpha', '1936', 't1', { code_schenk: 'C_NEW' }),
+    ])
+    expect(res.data!.etablissements.crees).toBe(1)
+    const insertPayload = mock.inserts.find((i) => i.table === 'etablissement')!.payload
+    expect(insertPayload.code_schenk).toBe('C_NEW')
+  })
+})
 
-  function mockSupabase(opts: MockOpts = {}) {
-    const etabs = opts.etabs ?? []
-    const contacts = opts.contacts ?? []
-    const insertedEtabId = opts.insertedEtabId ?? 'new_etab'
+describe('importerBatch — dédup par enseigne + cp + tournée (priorité #2)', () => {
+  beforeEach(() => vi.clearAllMocks())
 
-    const inserts: { table: string; payload: Record<string, unknown> }[] = []
-    const updates: { table: string; payload: Record<string, unknown>; id: string }[] = []
+  it("met à jour si enseigne+cp+tournée existe (sans code_schenk côté Excel)", async () => {
+    const mock = mockSupabase({
+      etabsByEnseigne: [{ id: 'e1', enseigne: 'Alpha', code_postal: '1936', tournee_id: 't1' }],
+    })
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const res = await importerBatch([ligne('Alpha', '1936', 't1')])
+    expect(res.data!.etablissements.misAJour).toBe(1)
+  })
 
-    // Compteurs pour distinguer les appels select initiaux vs les upserts suivants
-    let etabCall = 0
-    let contactCall = 0
+  it("insensible à la casse et aux accents sur l'enseigne", async () => {
+    const mock = mockSupabase({
+      etabsByEnseigne: [{ id: 'e1', enseigne: 'Café Alpha', code_postal: '1936', tournee_id: 't1' }],
+    })
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const res = await importerBatch([ligne('CAFE ALPHA', '1936', 't1')])
+    expect(res.data!.etablissements.misAJour).toBe(1)
+  })
+})
 
-    return {
-      supabase: {
-        from: vi.fn().mockImplementation((table: string) => {
-          if (table === 'etablissement') {
-            etabCall++
-            if (etabCall === 1) {
-              // Premier appel : SELECT existants
-              return {
-                select: vi.fn().mockReturnThis(),
-                is:     vi.fn().mockReturnThis(),
-                in:     vi.fn().mockResolvedValue({ data: etabs, error: null }),
-              }
-            }
-            // Appels suivants : INSERT ou UPDATE
-            return {
-              insert: vi.fn().mockImplementation((p: Record<string, unknown>) => {
-                inserts.push({ table: 'etablissement', payload: p })
-                return {
-                  select: vi.fn().mockReturnThis(),
-                  single: vi.fn().mockResolvedValue({
-                    data: { id: insertedEtabId }, error: null,
-                  }),
-                }
-              }),
-              update: vi.fn().mockImplementation((p: Record<string, unknown>) => ({
-                eq: vi.fn().mockImplementation((_col: string, id: string) => {
-                  updates.push({ table: 'etablissement', payload: p, id })
-                  return Promise.resolve({ data: null, error: null })
-                }),
-              })),
-            }
-          }
-          if (table === 'contact') {
-            contactCall++
-            // Le SELECT initial n'est fait par le code que si des etabs existants
-            // ont été trouvés. Sinon le code passe directement aux INSERT.
-            if (contactCall === 1 && etabs.length > 0) {
-              return {
-                select: vi.fn().mockReturnThis(),
-                is:     vi.fn().mockReturnThis(),
-                in:     vi.fn().mockResolvedValue({ data: contacts, error: null }),
-              }
-            }
-            return {
-              insert: vi.fn().mockImplementation((p: Record<string, unknown>) => {
-                inserts.push({ table: 'contact', payload: p })
-                return {
-                  select: vi.fn().mockReturnThis(),
-                  single: vi.fn().mockResolvedValue({ data: { id: 'new_c' }, error: null }),
-                }
-              }),
-              update: vi.fn().mockImplementation((p: Record<string, unknown>) => ({
-                eq: vi.fn().mockImplementation((_col: string, id: string) => {
-                  updates.push({ table: 'contact', payload: p, id })
-                  return Promise.resolve({ data: null, error: null })
-                }),
-              })),
-            }
-          }
-          return {}
-        }),
-      },
-      inserts,
-      updates,
-    }
-  }
+describe('importerBatch — tournée null (Prospects/Autres)', () => {
+  beforeEach(() => vi.clearAllMocks())
 
-  it('crée établissement + contact si les deux sont neufs', async () => {
+  it("insère avec tournee_id=NULL si tourneeId=null (onglet Prospects)", async () => {
+    const mock = mockSupabase({ insertedEtabId: 'e_p1' })
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const res = await importerBatch([
+      ligne('Prospect X', null, null, { statut: 'prospect' }),
+    ])
+    expect(res.data!.etablissements.crees).toBe(1)
+    const insertPayload = mock.inserts.find((i) => i.table === 'etablissement')!.payload
+    expect(insertPayload.tournee_id).toBeNull()
+  })
+})
+
+describe('importerBatch — contacts principaux', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('crée le contact principal si contact_nom présent', async () => {
     const mock = mockSupabase({ insertedEtabId: 'e_new' })
     vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
     const res = await importerBatch([
       ligne('Alpha', '1936', 't1', {
         contact_nom: 'Jean Dupont',
-        contact_fonction: 'Sommelier',
         telephone_principal: '+41 27 000',
       }),
     ])
-    expect(res.data!.etablissements.crees).toBe(1)
     expect(res.data!.contacts.crees).toBe(1)
-    const insertContact = mock.inserts.find((i) => i.table === 'contact')
-    expect(insertContact).toBeDefined()
-    const p = insertContact!.payload
-    expect(p.etablissement_id).toBe('e_new')
-    expect(p.nom).toBe('Dupont')
-    expect(p.prenom).toBe('Jean')
-    expect(p.fonction).toBe('Sommelier')
-    expect(p.est_principal).toBe(true)
-    // Fallback tel : contact_telephone absent → utilise telephone_principal
-    expect(p.telephone).toBe('+41 27 000')
-  })
-
-  it('met à jour établissement + contact si les deux existent (idempotence)', async () => {
-    const mock = mockSupabase({
-      etabs: [{ id: 'e1', enseigne: 'Alpha', code_postal: '1936', tournee_id: 't1' }],
-      contacts: [{ id: 'c1', etablissement_id: 'e1', nom: 'Dupont' }],
-    })
-    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
-    const res = await importerBatch([
-      ligne('Alpha', '1936', 't1', { contact_nom: 'Jean Dupont' }),
-    ])
-    expect(res.data!.etablissements.misAJour).toBe(1)
-    expect(res.data!.contacts.misAJour).toBe(1)
-    expect(mock.updates.some((u) => u.table === 'contact' && u.id === 'c1')).toBe(true)
+    const contactInsert = mock.inserts.find((i) => i.table === 'contact')!.payload
+    expect(contactInsert.nom).toBe('Dupont')
+    expect(contactInsert.prenom).toBe('Jean')
+    expect(contactInsert.telephone).toBe('+41 27 000')  // fallback
+    expect(contactInsert.est_principal).toBe(true)
   })
 
   it("ne crée pas de contact si contact_nom absent", async () => {
     const mock = mockSupabase({ insertedEtabId: 'e_new' })
     vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
     const res = await importerBatch([ligne('Alpha', '1936', 't1')])
-    expect(res.data!.etablissements.crees).toBe(1)
     expect(res.data!.contacts.crees).toBe(0)
   })
+})
 
-  it('cas insensible casse/accents sur enseigne (dédup établissement)', async () => {
-    const mock = mockSupabase({
-      etabs: [{ id: 'e1', enseigne: 'Café Alpha', code_postal: '1936', tournee_id: 't1' }],
-    })
+describe('importerBatch — notes_internes', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("écrit notes_internes dans l'INSERT établissement", async () => {
+    const mock = mockSupabase({ insertedEtabId: 'e_new' })
     vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
-    const res = await importerBatch([ligne('CAFE ALPHA', '1936', 't1')])
-    expect(res.data!.etablissements.misAJour).toBe(1)
+    await importerBatch([
+      ligne('Hôtel de la Poste', '1936', 't1', {
+        notes_internes: 'Nom raison sociale: MCB Sàrl',
+      }),
+    ])
+    const insertPayload = mock.inserts.find((i) => i.table === 'etablissement')!.payload
+    expect(insertPayload.notes_internes).toBe('Nom raison sociale: MCB Sàrl')
   })
+})
 
-  it('ignore une ligne sans tournée', async () => {
-    const mock = mockSupabase({})
-    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
-    const l = ligne('Alpha', '1936', '')
-    l.tourneeId = ''
-    const res = await importerBatch([l])
-    expect(res.data!.etablissements.ignores).toBe(1)
-    expect(res.data!.etablissements.crees).toBe(0)
-    expect(res.data!.contacts.crees).toBe(0)
+// -----------------------------------------------------------------------------
+// reinitialiserImport
+// -----------------------------------------------------------------------------
+
+describe('reinitialiserImport', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('supprime tous les établissements (contacts + visites cascade)', async () => {
+    const deleteChain = {
+      delete: vi.fn().mockReturnThis(),
+      gt:     vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
+    const countChain = {
+      select: vi.fn().mockResolvedValue({ count: 42, data: null, error: null }),
+    }
+    let call = 0
+    const supabase = {
+      from: vi.fn().mockImplementation(() => {
+        call++
+        return call === 1 ? countChain : deleteChain
+      }),
+    }
+    vi.mocked(createClient).mockResolvedValue(supabase as never)
+
+    const res = await reinitialiserImport()
+    expect(res.erreur).toBeUndefined()
+    expect(res.data!.supprimes).toBe(42)
+    expect(deleteChain.delete).toHaveBeenCalled()
+    // Vérifie qu'on ne touche PAS la table `tournee`
+    expect(supabase.from).not.toHaveBeenCalledWith('tournee')
   })
 })

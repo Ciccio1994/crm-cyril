@@ -17,6 +17,7 @@ const GROUPES_PRIX = [
 
 export const EtablissementCreateSchema = z.object({
   enseigne:              z.string().min(1, 'Enseigne obligatoire').max(200),
+  code_schenk:           z.string().max(50).nullable().optional(),
   statut:                z.enum(STATUTS).default('prospect'),
   type_etablissement:    z.enum(TYPES_ETAB).nullable().optional(),
   groupe_prix:           z.enum(GROUPES_PRIX).nullable().optional(),
