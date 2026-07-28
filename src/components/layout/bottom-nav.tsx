@@ -11,10 +11,10 @@ interface NavItem {
 }
 
 const ITEMS: NavItem[] = [
-  { href: '/',              label: 'Accueil',       emoji: '🏠' },
+  { href: '/',               label: "Aujourd'hui",    emoji: '📅' },
   { href: '/etablissements', label: 'Établissements', emoji: '🍷' },
-  { href: '/rappels',        label: 'Rappels',       emoji: '⏰' },
-  { href: '/chat',           label: 'Chat',          emoji: '💬' },
+  { href: '/funnel',         label: 'Funnel',         emoji: '📊' },
+  { href: '/chat',           label: 'Chat',           emoji: '💬' },
 ]
 
 export function BottomNav() {
