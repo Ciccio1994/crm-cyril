@@ -1,13 +1,25 @@
-export default function AccueilPage() {
+import { lireClientsEnRetard, lireSuggestionsProspection } from '@/actions/funnel'
+import { SuggestionsAujourdhui } from '@/components/home/suggestions-aujourdhui'
+import { formatDateSuisse } from '@/lib/format'
+
+export default async function AccueilPage() {
+  const [clients, prospects] = await Promise.all([
+    lireClientsEnRetard(),
+    lireSuggestionsProspection(),
+  ])
+
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <span aria-hidden className="text-5xl">
-        🍷
-      </span>
-      <h1 className="text-2xl font-semibold">CRM Cyril</h1>
-      <p className="text-sm text-muted-foreground">
-        Le tableau de bord 6+2 arrive en V1c.
-      </p>
+    <div className="flex flex-col gap-4 px-4 py-4">
+      <header>
+        <h1 className="text-xl font-semibold">Aujourd&apos;hui</h1>
+        <p className="text-sm text-muted-foreground">
+          {formatDateSuisse(new Date().toISOString())} — tes priorités du jour.
+        </p>
+      </header>
+      <SuggestionsAujourdhui
+        clients={clients.data ?? []}
+        prospects={prospects.data ?? []}
+      />
     </div>
   )
 }
