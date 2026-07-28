@@ -20,7 +20,7 @@ import {
   mettreAJourEtablissement,
 } from '@/actions/etablissement'
 import { ChampAdresseAutocomplete } from './champ-adresse-autocomplete'
-import type { SuggestionAdresse } from '@/lib/geocode'
+import type { DetailsLieu } from '@/lib/geocode'
 import type {
   Etablissement,
   StatutCommercial,
@@ -143,14 +143,20 @@ export function FormulaireEtablissement({
     setState((s) => ({ ...s, [k]: v }))
   }
 
-  function appliquerSuggestion(sugg: SuggestionAdresse) {
+  function appliquerSuggestion(details: DetailsLieu) {
     setState((s) => ({
       ...s,
-      adresse_ligne_1: sugg.adresse_ligne_1 || s.adresse_ligne_1,
-      code_postal:     sugg.code_postal ?? s.code_postal,
-      ville:           sugg.ville ?? s.ville,
-      latitude:        sugg.latitude,
-      longitude:       sugg.longitude,
+      // Adresse : toujours remplacer par Google si dispo
+      adresse_ligne_1:      details.adresse_ligne_1 || s.adresse_ligne_1,
+      code_postal:          details.code_postal ?? s.code_postal,
+      ville:                details.ville ?? s.ville,
+      latitude:             details.latitude,
+      longitude:            details.longitude,
+      // Tel & site : uniquement si l'utilisateur n'a rien tapé
+      telephone_principal:  s.telephone_principal || details.telephone || '',
+      site_web:             s.site_web || details.site_web || '',
+      // Si l'enseigne est vide, on la remplit avec le displayName Google
+      enseigne:             s.enseigne || details.display_name,
     }))
   }
 
@@ -272,7 +278,7 @@ export function FormulaireEtablissement({
             Adresse
           </h2>
           <div className="space-y-1.5">
-            <Label htmlFor="adresse1">Adresse</Label>
+            <Label htmlFor="adresse1">Adresse ou nom d&apos;établissement</Label>
             <ChampAdresseAutocomplete
               id="adresse1"
               value={state.adresse_ligne_1}
@@ -280,8 +286,9 @@ export function FormulaireEtablissement({
               onSuggestion={appliquerSuggestion}
             />
             <p className="text-xs text-muted-foreground">
-              Suggestions OpenStreetMap (Suisse). Le CP, la ville et les
-              coordonnées se remplissent automatiquement.
+              Cherche par nom d&apos;établissement ou par adresse (Suisse).
+              L&apos;enseigne, le CP, la ville, le téléphone, le site et les
+              coordonnées se remplissent si vides.
             </p>
           </div>
           <div className="space-y-1.5">

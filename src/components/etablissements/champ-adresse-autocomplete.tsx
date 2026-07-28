@@ -2,18 +2,25 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
-import { chercherAdresses } from '@/actions/geocode'
-import type { SuggestionAdresse } from '@/lib/geocode'
+import { chercherLieux, detailsLieu } from '@/actions/geocode'
+import type { DetailsLieu, SuggestionLieu } from '@/lib/geocode'
 
 interface ChampAdresseAutocompleteProps {
   id?: string
   value: string
   onChange: (value: string) => void
-  onSuggestion: (s: SuggestionAdresse) => void
+  onSuggestion: (details: DetailsLieu) => void
 }
 
 const DEBOUNCE_MS = 300
 const MIN_CHARS = 3
+
+function nouveauToken() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
 
 export function ChampAdresseAutocomplete({
   id,
@@ -21,10 +28,12 @@ export function ChampAdresseAutocomplete({
   onChange,
   onSuggestion,
 }: ChampAdresseAutocompleteProps) {
-  const [suggestions, setSuggestions] = useState<SuggestionAdresse[]>([])
+  const [suggestions, setSuggestions] = useState<SuggestionLieu[]>([])
   const [loading, setLoading] = useState(false)
   const [ouvert, setOuvert] = useState(false)
   const [suppressed, setSuppressed] = useState(false)
+  const [chargementDetails, setChargementDetails] = useState(false)
+  const [sessionToken, setSessionToken] = useState(() => nouveauToken())
   const dernierQueryRef = useRef<string>('')
 
   useEffect(() => {
@@ -43,9 +52,8 @@ export function ChampAdresseAutocomplete({
     dernierQueryRef.current = q
     const timeout = setTimeout(async () => {
       setLoading(true)
-      const result = await chercherAdresses(q)
+      const result = await chercherLieux(q, sessionToken)
       if (controller.signal.aborted) return
-      // Ignore le résultat si l'utilisateur a continué à taper entre-temps
       if (dernierQueryRef.current !== q) return
       setLoading(false)
       if (result.data) {
@@ -58,13 +66,23 @@ export function ChampAdresseAutocomplete({
       controller.abort()
       clearTimeout(timeout)
     }
-  }, [value, suppressed])
+  }, [value, suppressed, sessionToken])
 
-  function choisir(s: SuggestionAdresse) {
-    setSuppressed(true)
+  async function choisir(s: SuggestionLieu) {
+    setChargementDetails(true)
     setOuvert(false)
-    setSuggestions([])
-    onSuggestion(s)
+    setSuppressed(true)
+    try {
+      const result = await detailsLieu(s.placeId, sessionToken)
+      if (result.data) {
+        onSuggestion(result.data)
+      }
+    } finally {
+      setChargementDetails(false)
+      setSuggestions([])
+      // Session Google terminée → nouveau token pour la prochaine saisie
+      setSessionToken(nouveauToken())
+    }
   }
 
   return (
@@ -77,6 +95,7 @@ export function ChampAdresseAutocomplete({
         onBlur={() => setTimeout(() => setOuvert(false), 150)}
         className="h-12 text-base"
         autoComplete="off"
+        disabled={chargementDetails}
       />
       {ouvert && (loading || suggestions.length > 0) && (
         <ul
@@ -88,20 +107,20 @@ export function ChampAdresseAutocomplete({
               Recherche…
             </li>
           )}
-          {suggestions.map((s, idx) => (
-            <li key={`${s.latitude},${s.longitude}-${idx}`}>
+          {suggestions.map((s) => (
+            <li key={s.placeId}>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => choisir(s)}
                 className="tap-target block w-full border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/50"
               >
-                <span className="block font-medium">
-                  {s.adresse_ligne_1 || s.display_name}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  {[s.code_postal, s.ville].filter(Boolean).join(' ')}
-                </span>
+                <span className="block font-medium">{s.mainText}</span>
+                {s.secondaryText && (
+                  <span className="block text-xs text-muted-foreground">
+                    {s.secondaryText}
+                  </span>
+                )}
               </button>
             </li>
           ))}

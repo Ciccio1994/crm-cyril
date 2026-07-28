@@ -1,62 +1,133 @@
-export interface SuggestionAdresse {
+// Google Places (NEW) API v1 — parsers purs, testables sans réseau.
+// Le proxy Server Action se charge du secret X-Goog-Api-Key et de l'accept-language.
+
+export interface AdresseComponents {
+  adresse_ligne_1: string | null
+  code_postal: string | null
+  ville: string | null
+}
+
+export interface SuggestionLieu {
+  placeId: string
+  mainText: string
+  secondaryText: string
+}
+
+export interface DetailsLieu {
   display_name: string
-  adresse_ligne_1: string
+  adresse_ligne_1: string | null
   code_postal: string | null
   ville: string | null
   latitude: number
   longitude: number
+  telephone?: string
+  site_web?: string
 }
 
-interface NominatimAddress {
-  house_number?: string
-  road?: string
-  pedestrian?: string
-  postcode?: string
-  town?: string
-  village?: string
-  city?: string
-  hamlet?: string
-  municipality?: string
+interface RawAddressComponent {
+  longText?: string
+  shortText?: string
+  types?: string[]
 }
 
-interface NominatimRaw {
-  lat?: string
-  lon?: string
-  display_name?: string
-  address?: NominatimAddress
+function findComponent(
+  components: RawAddressComponent[],
+  ...types: string[]
+): string | null {
+  for (const t of types) {
+    const match = components.find((c) => c.types?.includes(t))
+    if (match?.longText) return match.longText
+  }
+  return null
 }
 
-export function parseNominatimResult(
-  raw: unknown,
-): SuggestionAdresse | null {
+export function parseAddressComponents(
+  components: RawAddressComponent[],
+): AdresseComponents {
+  if (!Array.isArray(components) || components.length === 0) {
+    return { adresse_ligne_1: null, code_postal: null, ville: null }
+  }
+  const numero = findComponent(components, 'street_number')
+  const rue = findComponent(components, 'route', 'pedestrian')
+  const adresse_ligne_1 =
+    [numero, rue].filter(Boolean).join(' ').trim() || null
+
+  const code_postal = findComponent(components, 'postal_code')
+
+  const ville = findComponent(
+    components,
+    'locality',
+    'postal_town',
+    'sublocality',
+    'sublocality_level_1',
+    'administrative_area_level_2',
+  )
+
+  return { adresse_ligne_1, code_postal, ville }
+}
+
+interface RawPlaceDetails {
+  id?: string
+  displayName?: { text?: string }
+  formattedAddress?: string
+  addressComponents?: RawAddressComponent[]
+  location?: { latitude?: number; longitude?: number }
+  internationalPhoneNumber?: string
+  nationalPhoneNumber?: string
+  websiteUri?: string
+}
+
+export function parsePlaceDetails(raw: unknown): DetailsLieu | null {
   if (!raw || typeof raw !== 'object') return null
-  const item = raw as NominatimRaw
+  const p = raw as RawPlaceDetails
 
-  if (!item.address) return null
-  if (!item.lat || !item.lon) return null
+  const lat = p.location?.latitude
+  const lng = p.location?.longitude
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
 
-  const latitude = Number(item.lat)
-  const longitude = Number(item.lon)
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
-
-  const rue = item.address.road ?? item.address.pedestrian ?? ''
-  const numero = item.address.house_number ?? ''
-  const adresse_ligne_1 = [numero, rue].filter(Boolean).join(' ').trim()
-
-  const ville =
-    item.address.town ??
-    item.address.village ??
-    item.address.city ??
-    item.address.hamlet ??
-    item.address.municipality ??
-    null
+  const composants = parseAddressComponents(p.addressComponents ?? [])
+  const nom = p.displayName?.text ?? p.formattedAddress ?? ''
 
   return {
-    display_name: item.display_name ?? adresse_ligne_1,
-    adresse_ligne_1,
-    code_postal: item.address.postcode ?? null,
-    ville,
-    latitude,
-    longitude,
+    display_name: nom,
+    adresse_ligne_1: composants.adresse_ligne_1,
+    code_postal: composants.code_postal,
+    ville: composants.ville,
+    latitude: lat,
+    longitude: lng,
+    telephone: p.internationalPhoneNumber ?? p.nationalPhoneNumber,
+    site_web: p.websiteUri,
+  }
+}
+
+interface RawAutocompleteSuggestion {
+  placePrediction?: {
+    place?: string
+    placeId?: string
+    text?: { text?: string }
+    structuredFormat?: {
+      mainText?: { text?: string }
+      secondaryText?: { text?: string }
+    }
+  }
+  queryPrediction?: unknown
+}
+
+export function parseAutocompleteSuggestion(
+  raw: unknown,
+): SuggestionLieu | null {
+  if (!raw || typeof raw !== 'object') return null
+  const s = raw as RawAutocompleteSuggestion
+  const pred = s.placePrediction
+  if (!pred?.placeId) return null
+
+  const mainStructured = pred.structuredFormat?.mainText?.text
+  const secondaryStructured = pred.structuredFormat?.secondaryText?.text
+
+  return {
+    placeId: pred.placeId,
+    mainText: mainStructured ?? pred.text?.text ?? '',
+    secondaryText: secondaryStructured ?? '',
   }
 }
