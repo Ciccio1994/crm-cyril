@@ -7,6 +7,7 @@ import {
   lireStatistiquesFunnel,
   lireClientsEnRetard,
   lireSuggestionsProspection,
+  actualiserFunnel,
 } from '@/actions/funnel'
 import { createClient } from '@/lib/supabase/server'
 
@@ -81,5 +82,97 @@ describe('lireSuggestionsProspection', () => {
     const r = await lireSuggestionsProspection()
     expect(r.data!.length).toBe(1)
     expect(mock.chain.eq).toHaveBeenCalledWith('statut', 'prospect')
+  })
+})
+
+describe('actualiserFunnel', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function mockActualise(
+    etabs: {
+      id: string
+      statut: string
+      derniere_commande_at: string | null
+      derniere_visite_at: string | null
+      seuil_inactivite_mois: number
+    }[],
+    visitesCount: Record<string, number> = {},
+  ) {
+    const updates: { id: string; payload: Record<string, unknown> }[] = []
+    const supabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'etablissement') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            is:     vi.fn().mockReturnThis(),
+            in:     vi.fn().mockResolvedValue({ data: etabs, error: null }),
+            update: vi.fn().mockImplementation((p: Record<string, unknown>) => ({
+              eq: vi.fn().mockImplementation((_c: string, id: string) => {
+                updates.push({ id, payload: p })
+                return Promise.resolve({ error: null })
+              }),
+            })),
+          }
+        }
+        if (table === 'visite') {
+          const chain = {
+            select: vi.fn().mockReturnThis(),
+            is:     vi.fn().mockReturnThis(),
+            eq:     vi.fn().mockImplementation((_c: string, val: string) => {
+              return Promise.resolve({
+                data: Array(visitesCount[val] ?? 0).fill({ id: 'v' }),
+                error: null,
+              })
+            }),
+          }
+          return chain
+        }
+        return {}
+      }),
+    }
+    return { supabase, updates }
+  }
+
+  it('passe client_actif → client_inactif si commande > seuil', async () => {
+    const mock = mockActualise([{
+      id: 'e1', statut: 'client_actif',
+      derniere_commande_at: '2024-01-01T00:00:00Z',
+      derniere_visite_at: null,
+      seuil_inactivite_mois: 12,
+    }])
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const r = await actualiserFunnel()
+    expect(r.data!.vers_inactif).toBe(1)
+    expect(mock.updates[0].payload.statut).toBe('client_inactif')
+  })
+
+  it('passe prospect → prospect_abandonne si 3 visites sans commande', async () => {
+    const mock = mockActualise(
+      [{
+        id: 'p1', statut: 'prospect',
+        derniere_commande_at: null,
+        derniere_visite_at: '2026-06-01T00:00:00Z',
+        seuil_inactivite_mois: 12,
+      }],
+      { p1: 3 },
+    )
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const r = await actualiserFunnel()
+    expect(r.data!.vers_abandonne).toBe(1)
+    expect(mock.updates[0].payload.statut).toBe('prospect_abandonne')
+  })
+
+  it("ne touche pas ceux dont l'évaluation retourne le même statut", async () => {
+    const mock = mockActualise([{
+      id: 'e1', statut: 'client_actif',
+      derniere_commande_at: '2026-05-01T00:00:00Z',
+      derniere_visite_at: null,
+      seuil_inactivite_mois: 12,
+    }])
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const r = await actualiserFunnel()
+    expect(r.data!.vers_inactif).toBe(0)
+    expect(mock.updates.length).toBe(0)
+    expect(r.data!.examines).toBe(1)
   })
 })
