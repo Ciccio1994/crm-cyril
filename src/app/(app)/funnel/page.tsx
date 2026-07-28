@@ -1,13 +1,16 @@
 import { lireStatistiquesFunnel, lireClientsEnRetard } from '@/actions/funnel'
+import { lireHistoriqueHebdo } from '@/actions/objectif'
 import { CamembertStatuts } from '@/components/funnel/camembert-statuts'
 import { ListeEnDanger } from '@/components/funnel/liste-en-danger'
 import { BoutonActualiser } from '@/components/funnel/bouton-actualiser'
+import { HistoriqueHebdoChart } from '@/components/funnel/historique-hebdo'
 import { Card } from '@/components/ui/card'
 
 export default async function FunnelPage() {
-  const [stats, enRetard] = await Promise.all([
+  const [stats, enRetard, histo] = await Promise.all([
     lireStatistiquesFunnel(),
     lireClientsEnRetard(),
+    lireHistoriqueHebdo(),
   ])
 
   if (stats.erreur || !stats.data) {
@@ -50,6 +53,8 @@ export default async function FunnelPage() {
           </div>
         </div>
       </Card>
+
+      {histo.data && <HistoriqueHebdoChart h={histo.data} />}
 
       <BoutonActualiser />
 
