@@ -1,6 +1,7 @@
 import { lireClientsEnRetard, lireSuggestionsProspection } from '@/actions/funnel'
 import { SuggestionsAujourdhui } from '@/components/home/suggestions-aujourdhui'
 import { WidgetObjectif } from '@/components/home/widget-objectif'
+import { WidgetOffresAccueil } from '@/components/offres/widget-offres-accueil'
 import { formatDateSuisse } from '@/lib/format'
 
 export default async function AccueilPage() {
@@ -18,6 +19,7 @@ export default async function AccueilPage() {
         </p>
       </header>
       <WidgetObjectif />
+      <WidgetOffresAccueil />
       <SuggestionsAujourdhui
         clients={clients.data ?? []}
         prospects={prospects.data ?? []}

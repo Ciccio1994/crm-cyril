@@ -16,9 +16,11 @@ import { cn } from '@/lib/utils'
 import { OngletContacts } from '@/components/contacts/onglet-contacts'
 import { OngletVisites } from '@/components/visites/onglet-visites'
 import { ActionsRapides } from './actions-rapides'
+import { CarteOffre } from '@/components/offres/carte-offre'
 import type {
   Contact,
   Etablissement,
+  Offre,
   StatutCommercial,
   Visite,
 } from '@/types/database'
@@ -59,10 +61,12 @@ export function FicheEtablissement({
   etablissement,
   contacts,
   visites,
+  offresActives,
 }: {
   etablissement: Etablissement
   contacts: Contact[]
   visites: Visite[]
+  offresActives: Offre[]
 }) {
   const router = useRouter()
   const retard = calculerRetard(
@@ -162,6 +166,23 @@ export function FicheEtablissement({
                 {etablissement.notes_internes}
               </p>
             </div>
+          )}
+          {offresActives.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Offres en cours ({offresActives.length})
+              </h3>
+              <ul className="space-y-2">
+                {offresActives.map((o) => (
+                  <li key={o.id}>
+                    <CarteOffre
+                      offre={o}
+                      href={`/admin/offres/${o.id}/modifier`}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </TabsContent>
 
