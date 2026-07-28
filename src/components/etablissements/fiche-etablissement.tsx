@@ -13,7 +13,12 @@ import { buttonVariants } from '@/components/ui/button'
 import { BadgeRetard } from './badge-retard'
 import { calculerRetard } from '@/lib/retard'
 import { cn } from '@/lib/utils'
-import type { Etablissement, StatutCommercial } from '@/types/database'
+import { OngletContacts } from '@/components/contacts/onglet-contacts'
+import type {
+  Contact,
+  Etablissement,
+  StatutCommercial,
+} from '@/types/database'
 
 const LIBELLE_STATUT: Record<StatutCommercial, string> = {
   prospect:            'Prospect',
@@ -49,8 +54,10 @@ function BlocInfos({ champs }: { champs: Champ[] }) {
 
 export function FicheEtablissement({
   etablissement,
+  contacts,
 }: {
   etablissement: Etablissement
+  contacts: Contact[]
 }) {
   const router = useRouter()
   const retard = calculerRetard(
@@ -152,9 +159,10 @@ export function FicheEtablissement({
         </TabsContent>
 
         <TabsContent value="contacts" className="mt-4 pb-8">
-          <p className="rounded-lg border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-            Onglet Contacts — arrive à la tâche 6.
-          </p>
+          <OngletContacts
+            etablissementId={etablissement.id}
+            contacts={contacts}
+          />
         </TabsContent>
 
         <TabsContent value="visites" className="mt-4 pb-8">
