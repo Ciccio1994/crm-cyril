@@ -19,6 +19,8 @@ import {
   creerEtablissement,
   mettreAJourEtablissement,
 } from '@/actions/etablissement'
+import { ChampAdresseAutocomplete } from './champ-adresse-autocomplete'
+import type { SuggestionAdresse } from '@/lib/geocode'
 import type {
   Etablissement,
   StatutCommercial,
@@ -81,6 +83,8 @@ type FormState = {
   site_web: string
   horaires_libre: string
   notes_internes: string
+  latitude: number | null
+  longitude: number | null
 }
 
 function initFromEtab(e?: Etablissement): FormState {
@@ -99,6 +103,8 @@ function initFromEtab(e?: Etablissement): FormState {
     site_web:              e?.site_web ?? '',
     horaires_libre:        e?.horaires_libre ?? '',
     notes_internes:        e?.notes_internes ?? '',
+    latitude:              e?.latitude ?? null,
+    longitude:             e?.longitude ?? null,
   }
 }
 
@@ -119,6 +125,8 @@ function payloadFromState(s: FormState) {
     site_web: clean(s.site_web),
     horaires_libre: clean(s.horaires_libre),
     notes_internes: clean(s.notes_internes),
+    latitude: s.latitude,
+    longitude: s.longitude,
   }
 }
 
@@ -133,6 +141,17 @@ export function FormulaireEtablissement({
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setState((s) => ({ ...s, [k]: v }))
+  }
+
+  function appliquerSuggestion(sugg: SuggestionAdresse) {
+    setState((s) => ({
+      ...s,
+      adresse_ligne_1: sugg.adresse_ligne_1 || s.adresse_ligne_1,
+      code_postal:     sugg.code_postal ?? s.code_postal,
+      ville:           sugg.ville ?? s.ville,
+      latitude:        sugg.latitude,
+      longitude:       sugg.longitude,
+    }))
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -254,12 +273,16 @@ export function FormulaireEtablissement({
           </h2>
           <div className="space-y-1.5">
             <Label htmlFor="adresse1">Adresse</Label>
-            <Input
+            <ChampAdresseAutocomplete
               id="adresse1"
               value={state.adresse_ligne_1}
-              onChange={(e) => set('adresse_ligne_1', e.target.value)}
-              className="h-12 text-base"
+              onChange={(v) => set('adresse_ligne_1', v)}
+              onSuggestion={appliquerSuggestion}
             />
+            <p className="text-xs text-muted-foreground">
+              Suggestions OpenStreetMap (Suisse). Le CP, la ville et les
+              coordonnées se remplissent automatiquement.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="adresse2">Complément</Label>
