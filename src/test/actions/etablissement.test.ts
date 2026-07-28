@@ -4,8 +4,13 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 vi.mock('@/lib/supabase/server')
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
-import { creerEtablissement, mettreAJourEtablissement, supprimerEtablissement }
-  from '@/actions/etablissement'
+import {
+  creerEtablissement,
+  mettreAJourEtablissement,
+  supprimerEtablissement,
+  lireEtablissements,
+  lireEtablissement,
+} from '@/actions/etablissement'
 import { createClient } from '@/lib/supabase/server'
 
 function mockChain(overrides: Record<string, unknown> = {}) {
@@ -95,5 +100,56 @@ describe('supprimerEtablissement', () => {
     expect(chain.update).toHaveBeenCalledWith(
       expect.objectContaining({ deleted_at: expect.any(String) })
     )
+  })
+})
+
+describe('lireEtablissements', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('retourne la liste depuis Supabase', async () => {
+    const list = [{ id: 'a', enseigne: 'Alpha' }, { id: 'b', enseigne: 'Beta' }]
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      is:     vi.fn().mockReturnThis(),
+      order:  vi.fn().mockResolvedValue({ data: list, error: null }),
+      eq:     vi.fn().mockReturnThis(),
+      or:     vi.fn().mockReturnThis(),
+      ilike:  vi.fn().mockReturnThis(),
+    }
+    vi.mocked(createClient).mockResolvedValue({ from: vi.fn().mockReturnValue(chain) } as never)
+
+    const result = await lireEtablissements()
+    expect(result.data).toHaveLength(2)
+  })
+
+  it('filtre par tournee_id si fourni', async () => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      is:     vi.fn().mockReturnThis(),
+      order:  vi.fn().mockResolvedValue({ data: [], error: null }),
+      eq:     vi.fn().mockReturnThis(),
+      or:     vi.fn().mockReturnThis(),
+      ilike:  vi.fn().mockReturnThis(),
+    }
+    vi.mocked(createClient).mockResolvedValue({ from: vi.fn().mockReturnValue(chain) } as never)
+
+    await lireEtablissements({ tournee_id: '11111111-1111-4111-8111-111111111111' })
+    expect(chain.eq).toHaveBeenCalledWith('tournee_id', '11111111-1111-4111-8111-111111111111')
+  })
+})
+
+describe('lireEtablissement', () => {
+  it('retourne un établissement par id', async () => {
+    const etab = { id: 'abc', enseigne: 'Test' }
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq:     vi.fn().mockReturnThis(),
+      is:     vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: etab, error: null }),
+    }
+    vi.mocked(createClient).mockResolvedValue({ from: vi.fn().mockReturnValue(chain) } as never)
+
+    const result = await lireEtablissement('abc')
+    expect(result.data?.enseigne).toBe('Test')
   })
 })

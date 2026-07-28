@@ -61,3 +61,44 @@ export async function supprimerEtablissement(id: string): Promise<ActionResult<v
   revalidatePath('/etablissements')
   return {}
 }
+
+export interface FiltresEtablissement {
+  tournee_id?: string
+  statut?: string
+  recherche?: string
+}
+
+export async function lireEtablissements(
+  filtres: FiltresEtablissement = {}
+): Promise<ActionResult<Etablissement[]>> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('etablissement')
+    .select('*, tournee(id, nom, frequence_semaines)')
+    .is('deleted_at', null)
+
+  if (filtres.tournee_id) query = query.eq('tournee_id', filtres.tournee_id)
+  if (filtres.statut)     query = query.eq('statut', filtres.statut)
+  if (filtres.recherche) {
+    const q = `%${filtres.recherche}%`
+    query = query.or(`enseigne.ilike.${q},ville.ilike.${q},code_postal.ilike.${q}`)
+  }
+
+  const { data, error } = await query.order('enseigne', { ascending: true })
+  if (error) return { erreur: { message: error.message } }
+  return { data: data as Etablissement[] }
+}
+
+export async function lireEtablissement(id: string): Promise<ActionResult<Etablissement>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('etablissement')
+    .select('*, tournee(id, nom, frequence_semaines), entreprise(*)')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .single()
+
+  if (error) return { erreur: { message: error.message } }
+  return { data: data as Etablissement }
+}
