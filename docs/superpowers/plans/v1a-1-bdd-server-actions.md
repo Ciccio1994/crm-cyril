@@ -192,7 +192,10 @@ git commit -m "chore(v1a): migration 003 — correction schéma V1 (enums + colo
 
 ---
 
-## Tâche 2 — Migration 004 : reset des seeds
+## Tâche 2 — Migration 004 : reset des paramètres
+
+> **Décision V1** : pas de zones macro. Les 18 tournées Excel sont déjà en DB (seed 002).
+> Cette migration ne touche donc plus qu'à la table `parametre` (reset au format JSONB).
 
 **Fichiers :**
 - Créer : `supabase/migrations/004_v1a_seeds.sql`
@@ -202,56 +205,13 @@ git commit -m "chore(v1a): migration 003 — correction schéma V1 (enums + colo
 ```sql
 -- ============================================================================
 -- CRM Cyril — Migration 004 : seeds V1a
--- Reset zones + tournées (002_seeds avait 18 tournées sans zones, noms incorrects)
 -- Reset paramètres avec clés V1 et format JSONB
+-- (zones/tournées : conservées telles quelles en DB — pas de zones macro V1)
 -- ⚠️  À exécuter APRÈS 003 dans Supabase Dashboard > SQL Editor
 -- ============================================================================
 
--- 1. Vider les tournées et zones existantes (aucune FK client/établissement en V0)
-TRUNCATE tournee RESTART IDENTITY CASCADE;
-TRUNCATE zone    RESTART IDENTITY CASCADE;
-
--- 2. Supprimer les anciens paramètres
+-- Supprimer les anciens paramètres (recréés en JSONB)
 DELETE FROM parametre;
-
--- ===========================================================================
--- 4 zones macro
--- ===========================================================================
-INSERT INTO zone (id, nom, code) VALUES
-  ('11111111-0000-0000-0000-000000000001', 'Martigny-Entremont',    'A'),
-  ('11111111-0000-0000-0000-000000000002', 'Sion-Valais Central',   'B'),
-  ('11111111-0000-0000-0000-000000000003', 'Sierre-Anniviers',      'C'),
-  ('11111111-0000-0000-0000-000000000004', 'Crans-Montana-Verbier', 'D');
-
--- ===========================================================================
--- 19 tournées (issues de l'Excel Cyril + tournée de rattrapage)
--- frequence_semaines : 2 = hot (Sion, Martigny, Sierre, Verbier, Crans-Montana)
---                      4 = standard
--- ===========================================================================
-INSERT INTO tournee (nom, zone_id, frequence_semaines) VALUES
-  -- Zone A — Martigny-Entremont
-  ('Martigny - Finhaut - Ravoire - Trient',       '11111111-0000-0000-0000-000000000001', 2),
-  ('Fully - Saxon - Charrat',                      '11111111-0000-0000-0000-000000000001', 4),
-  ('Saillon - Leytron - Riddes - Tzoumaz',         '11111111-0000-0000-0000-000000000001', 4),
-  ('Orsières',                                     '11111111-0000-0000-0000-000000000001', 4),
-  ('B. St-Pierre - Champex - Liddes - Bovernier',  '11111111-0000-0000-0000-000000000001', 4),
-  ('Ovronnaz',                                     '11111111-0000-0000-0000-000000000001', 4),
-  ('Autres - Fouly - Vernayaz',                    '11111111-0000-0000-0000-000000000001', 4),
-  -- Zone B — Sion-Valais Central
-  ('Sion - Savièse',                               '11111111-0000-0000-0000-000000000002', 2),
-  ('Conthey - Aproz',                              '11111111-0000-0000-0000-000000000002', 4),
-  ('Ardon - Vétroz',                               '11111111-0000-0000-0000-000000000002', 4),
-  ('Chamoson',                                     '11111111-0000-0000-0000-000000000002', 4),
-  ('Nendaz',                                       '11111111-0000-0000-0000-000000000002', 4),
-  ('Anzère - Ayent',                               '11111111-0000-0000-0000-000000000002', 2),
-  ('Nax - Mase',                                   '11111111-0000-0000-0000-000000000002', 4),
-  ('Hérémence - Thyon',                            '11111111-0000-0000-0000-000000000002', 4),
-  -- Zone C — Sierre-Anniviers
-  ('Sierre - Grône - Bramois - Vercorin',          '11111111-0000-0000-0000-000000000003', 2),
-  ('Val d''Anniviers - Chandolin - Zinal',         '11111111-0000-0000-0000-000000000003', 4),
-  -- Zone D — Crans-Montana-Verbier
-  ('Crans-Montana - Chermignon',                   '11111111-0000-0000-0000-000000000004', 2),
-  ('Châble - Verbier - Vollèges',                  '11111111-0000-0000-0000-000000000004', 2);
 
 -- ===========================================================================
 -- Paramètres par défaut (format JSONB)
@@ -269,7 +229,7 @@ INSERT INTO parametre (cle, valeur) VALUES
   1. Coller et exécuter `003_v1a_schema.sql`
   2. Vérifier qu'il n'y a pas d'erreur
   3. Coller et exécuter `004_v1a_seeds.sql`
-  4. Vérifier dans Table Editor : 4 zones, 19 tournées, 5 paramètres
+  4. Vérifier dans Table Editor : table `zone` vide, 18 tournées inchangées, 5 paramètres avec valeurs JSONB
 
 - [ ] **Committer** :
 
@@ -322,13 +282,13 @@ export interface Zone {
   deleted_at: string | null
 }
 
+// Note V1 : Zone reste comme placeholder (table vide en V1, réservée V2+)
+// Tournee n'a donc pas de zone_id côté TS — le join ne remonte pas la zone.
 export interface Tournee {
   id: string
   nom: string
-  zone_id: string
   frequence_semaines: number
   jour_prefere: string | null
-  zone?: Zone
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -1023,7 +983,7 @@ export async function lireEtablissements(
 
   let query = supabase
     .from('etablissement')
-    .select('*, tournee(id, nom, frequence_semaines, zone(id, nom, code))')
+    .select('*, tournee(id, nom, frequence_semaines)')
     .is('deleted_at', null)
     .order('enseigne', { ascending: true })
 
@@ -1043,7 +1003,7 @@ export async function lireEtablissement(id: string): Promise<ActionResult<Etabli
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('etablissement')
-    .select('*, tournee(id, nom, frequence_semaines, zone(id, nom, code)), entreprise(*)')
+    .select('*, tournee(id, nom, frequence_semaines), entreprise(*)')
     .eq('id', id)
     .is('deleted_at', null)
     .single()
