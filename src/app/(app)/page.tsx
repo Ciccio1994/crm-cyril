@@ -1,5 +1,6 @@
 import { lireClientsEnRetard, lireSuggestionsProspection } from '@/actions/funnel'
 import { SuggestionsAujourdhui } from '@/components/home/suggestions-aujourdhui'
+import { WidgetObjectif } from '@/components/home/widget-objectif'
 import { formatDateSuisse } from '@/lib/format'
 
 export default async function AccueilPage() {
@@ -16,6 +17,7 @@ export default async function AccueilPage() {
           {formatDateSuisse(new Date().toISOString())} — tes priorités du jour.
         </p>
       </header>
+      <WidgetObjectif />
       <SuggestionsAujourdhui
         clients={clients.data ?? []}
         prospects={prospects.data ?? []}
