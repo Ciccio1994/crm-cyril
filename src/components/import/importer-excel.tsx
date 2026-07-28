@@ -1,43 +1,110 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useCallback, useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { previewImport, type PreviewImport } from '@/actions/import'
+import {
+  previewImport,
+  importerBatch,
+  type PreviewImport,
+  type LigneAImporter,
+  type RapportImport,
+} from '@/actions/import'
 
 type Etape = 'idle' | 'uploading' | 'preview' | 'importing' | 'done'
+const TAILLE_BATCH = 30
 
 export function ImporterExcel() {
   const [etape, setEtape] = useState<Etape>('idle')
   const [preview, setPreview] = useState<PreviewImport | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [progressionActuelle, setProgressionActuelle] = useState(0)
+  const [progressionTotal, setProgressionTotal] = useState(0)
+  const [rapport, setRapport] = useState<RapportImport | null>(null)
 
-  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setErreur(null)
-    setEtape('uploading')
-    const fd = new FormData()
-    fd.append('fichier', file)
-    startTransition(async () => {
-      const r = await previewImport(fd)
-      if (r.erreur || !r.data) {
-        setErreur(r.erreur ?? 'Erreur inconnue')
-        setEtape('idle')
-        return
-      }
-      setPreview(r.data)
-      setEtape('preview')
-    })
-  }
+  const onFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      setErreur(null)
+      setRapport(null)
+      setEtape('uploading')
+      const fd = new FormData()
+      fd.append('fichier', file)
+      startTransition(async () => {
+        const r = await previewImport(fd)
+        if (r.erreur || !r.data) {
+          setErreur(r.erreur ?? 'Erreur inconnue')
+          setEtape('idle')
+          return
+        }
+        setPreview(r.data)
+        setEtape('preview')
+      })
+    },
+    [],
+  )
 
   function reset() {
     setEtape('idle')
     setPreview(null)
     setErreur(null)
+    setRapport(null)
+    setProgressionActuelle(0)
+    setProgressionTotal(0)
   }
+
+  async function lancerImport() {
+    if (!preview) return
+    const aImporter: LigneAImporter[] = preview.onglets.flatMap((o) =>
+      o.tourneeId
+        ? o.lignes.map((l) => ({
+            tourneeId: o.tourneeId!,
+            numeroLigneExcel: l.numeroLigneExcel,
+            nomOnglet: o.nomOnglet,
+            payload: l.payload,
+          }))
+        : [],
+    )
+    setEtape('importing')
+    setProgressionTotal(aImporter.length)
+    setProgressionActuelle(0)
+    const cumule: RapportImport = {
+      etablissements: { crees: 0, misAJour: 0, ignores: 0 },
+      contacts:       { crees: 0, misAJour: 0 },
+      erreurs: [],
+    }
+
+    for (let i = 0; i < aImporter.length; i += TAILLE_BATCH) {
+      const batch = aImporter.slice(i, i + TAILLE_BATCH)
+      const r = await importerBatch(batch)
+      if (r.data) {
+        cumule.etablissements.crees    += r.data.etablissements.crees
+        cumule.etablissements.misAJour += r.data.etablissements.misAJour
+        cumule.etablissements.ignores  += r.data.etablissements.ignores
+        cumule.contacts.crees          += r.data.contacts.crees
+        cumule.contacts.misAJour       += r.data.contacts.misAJour
+        cumule.erreurs.push(...r.data.erreurs)
+      } else if (r.erreur) {
+        cumule.erreurs.push({
+          onglet: '(batch)',
+          ligne: i,
+          message: r.erreur,
+        })
+      }
+      setProgressionActuelle(Math.min(i + batch.length, aImporter.length))
+    }
+
+    setRapport(cumule)
+    setEtape('done')
+  }
+
+  const pct =
+    progressionTotal > 0
+      ? Math.round((progressionActuelle / progressionTotal) * 100)
+      : 0
 
   return (
     <div className="flex flex-col gap-4 px-4 py-6">
@@ -105,8 +172,86 @@ export function ImporterExcel() {
               </li>
             ))}
           </ul>
-          <Button type="button" disabled className="mt-4 h-12 w-full text-base">
-            Lancer l&apos;import (branché en T7)
+          <Button
+            type="button"
+            onClick={lancerImport}
+            className="mt-4 h-12 w-full text-base"
+          >
+            Lancer l&apos;import de {preview.totalLignes} lignes
+          </Button>
+        </Card>
+      )}
+
+      {etape === 'importing' && (
+        <Card className="p-4">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span>Import en cours…</span>
+            <span>
+              {progressionActuelle} / {progressionTotal}
+            </span>
+          </div>
+          <div className="h-3 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </Card>
+      )}
+
+      {etape === 'done' && rapport && (
+        <Card className="space-y-4 p-4">
+          <h2 className="font-semibold">Import terminé</h2>
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Établissements
+            </p>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md border p-3">
+                <p className="text-2xl font-bold">{rapport.etablissements.crees}</p>
+                <p className="text-xs text-muted-foreground">Créés</p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-2xl font-bold">{rapport.etablissements.misAJour}</p>
+                <p className="text-xs text-muted-foreground">Mis à jour</p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-2xl font-bold">{rapport.etablissements.ignores}</p>
+                <p className="text-xs text-muted-foreground">Ignorés</p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Contacts principaux
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="rounded-md border p-3">
+                <p className="text-2xl font-bold">{rapport.contacts.crees}</p>
+                <p className="text-xs text-muted-foreground">Créés</p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-2xl font-bold">{rapport.contacts.misAJour}</p>
+                <p className="text-xs text-muted-foreground">Mis à jour</p>
+              </div>
+            </div>
+          </div>
+          {rapport.erreurs.length > 0 && (
+            <details className="rounded-md border p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                {rapport.erreurs.length} erreur(s)
+              </summary>
+              <ul className="mt-2 space-y-1 text-xs">
+                {rapport.erreurs.map((e, i) => (
+                  <li key={i} className="text-destructive">
+                    {e.onglet} L{e.ligne} : {e.message}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <Button type="button" onClick={reset} className="h-12 w-full">
+            Nouvel import
           </Button>
         </Card>
       )}
