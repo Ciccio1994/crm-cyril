@@ -50,27 +50,15 @@ export function ChampAdresseAutocomplete({
 
     const controller = new AbortController()
     dernierQueryRef.current = q
-    console.log('[Autocomplete] effect fired, query:', q, '| min chars ok, will debounce', DEBOUNCE_MS, 'ms')
     const timeout = setTimeout(async () => {
-      console.log('[Autocomplete] debounce end → calling chercherLieux for:', q)
       setLoading(true)
       const result = await chercherLieux(q, sessionToken)
-      console.log('[Autocomplete] result:', result)
-      if (controller.signal.aborted) {
-        console.log('[Autocomplete] aborted, ignore result')
-        return
-      }
-      if (dernierQueryRef.current !== q) {
-        console.log('[Autocomplete] stale (dernier=', dernierQueryRef.current, ', q=', q, ')')
-        return
-      }
+      if (controller.signal.aborted) return
+      if (dernierQueryRef.current !== q) return
       setLoading(false)
       if (result.data) {
-        console.log('[Autocomplete] setting', result.data.length, 'suggestions + ouvert=true')
         setSuggestions(result.data)
         setOuvert(true)
-      } else {
-        console.log('[Autocomplete] no data, erreur:', result.erreur)
       }
     }, DEBOUNCE_MS)
 
