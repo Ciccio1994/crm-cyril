@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   normaliserHeader,
-  normaliserTournee,
   mapperStatut,
   mapperGroupePrix,
 } from '@/lib/excel/normaliser'
@@ -16,17 +15,6 @@ describe('normaliserHeader', () => {
     expect(normaliserHeader(null)).toBe('')
     expect(normaliserHeader(undefined)).toBe('')
     expect(normaliserHeader('   ')).toBe('')
-  })
-})
-
-describe('normaliserTournee', () => {
-  it("Sion - Savièse et sion saviese matchent (accents + ponctuation ignorés)", () => {
-    expect(normaliserTournee('Sion - Savièse')).toBe('sion saviese')
-    expect(normaliserTournee('sion  saviese')).toBe('sion saviese')
-  })
-  it("Val d'Anniviers gère les apostrophes", () => {
-    expect(normaliserTournee("Val d'Anniviers - Chandolin - Zinal"))
-      .toBe('val d anniviers chandolin zinal')
   })
 })
 

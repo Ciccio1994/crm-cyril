@@ -15,16 +15,6 @@ export function normaliserHeader(v: string | null | undefined): string {
     .replace(/\s+/g, ' ')
 }
 
-export function normaliserTournee(v: string): string {
-  return v
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^\w\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
 export function mapperStatut(v: string | null | undefined): StatutCommercial {
   const n = normaliserHeader(v)
   if (n.includes('actif') && !n.includes('inactif')) return 'client_actif'

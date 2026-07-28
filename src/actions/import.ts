@@ -2,7 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { parseFichier, type LigneImport, type PayloadImport } from '@/lib/excel/parser'
-import { normaliserHeader, normaliserTournee } from '@/lib/excel/normaliser'
+import { normaliserHeader } from '@/lib/excel/normaliser'
+import { mapperTournee } from '@/lib/excel/tournee-matcher'
 import { splitContactName } from '@/lib/contact-picker'
 
 export interface OngletPreview {
@@ -40,16 +41,19 @@ export async function previewImport(
     .is('deleted_at', null)
   if (error) return { erreur: `Erreur BDD tournées : ${error.message}` }
 
-  const index = new Map<string, { id: string; nom: string }>()
-  for (const t of tourneesDb ?? []) {
-    index.set(normaliserTournee(t.nom), { id: t.id, nom: t.nom })
-  }
+  const candidats = (tourneesDb ?? []).map((t) => ({ id: t.id, nom: t.nom }))
+  const nomsCandidats = candidats.map((c) => c.nom)
 
   let totalLignes = 0
   const previews: OngletPreview[] = onglets.map((o) => {
-    const cle = normaliserTournee(o.nomOnglet)
-    const match = index.get(cle) ?? null
+    const match = mapperTournee(o.nomOnglet, candidats)
     totalLignes += o.lignes.length
+    if (!match) {
+      console.log(
+        `[previewImport] Onglet "${o.nomOnglet}" non mappé — tournées disponibles :`,
+        nomsCandidats,
+      )
+    }
     return {
       nomOnglet: o.nomOnglet,
       tourneeId: match?.id ?? null,
