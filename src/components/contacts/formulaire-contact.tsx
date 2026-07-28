@@ -13,6 +13,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { creerContact, mettreAJourContact } from '@/actions/contact'
+import {
+  isContactPickerSupported,
+  selectContact as pickContactFromDevice,
+} from '@/lib/contact-picker'
 import type { Contact } from '@/types/database'
 
 interface FormulaireContactProps {
@@ -55,6 +59,12 @@ export function FormulaireContact({
   const [state, setState] = useState<FormState>(() => initFrom(contact))
   const [erreur, setErreur] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [pickerSupported, setPickerSupported] = useState(false)
+  const [picking, setPicking] = useState(false)
+
+  useEffect(() => {
+    setPickerSupported(isContactPickerSupported())
+  }, [])
 
   useEffect(() => {
     if (open) {
@@ -65,6 +75,25 @@ export function FormulaireContact({
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setState((s) => ({ ...s, [k]: v }))
+  }
+
+  async function importerDepuisContacts() {
+    setErreur(null)
+    setPicking(true)
+    try {
+      const preselect = await pickContactFromDevice()
+      if (!preselect) return
+      // Ne remplace pas ce que l'utilisateur a déjà tapé
+      setState((s) => ({
+        ...s,
+        prenom:    s.prenom    || preselect.prenom    || '',
+        nom:       s.nom       || preselect.nom       || '',
+        telephone: s.telephone || preselect.telephone || '',
+        email:     s.email     || preselect.email     || '',
+      }))
+    } finally {
+      setPicking(false)
+    }
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -110,6 +139,26 @@ export function FormulaireContact({
           onSubmit={onSubmit}
           className="flex flex-col gap-3 px-4 pb-4"
         >
+          {!contact && (
+            <div className="space-y-1">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!pickerSupported || picking}
+                onClick={importerDepuisContacts}
+                className="h-12 w-full text-base"
+              >
+                {picking
+                  ? 'Ouverture…'
+                  : '📱 Choisir dans mes contacts'}
+              </Button>
+              {!pickerSupported && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Non disponible sur ce navigateur.
+                </p>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <Label htmlFor="c-prenom">Prénom</Label>
