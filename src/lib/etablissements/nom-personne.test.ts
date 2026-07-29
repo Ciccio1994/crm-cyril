@@ -10,18 +10,37 @@ describe('estNomPersonne', () => {
     expect(estNomPersonne('Prof Meyer')).toBe(true)
   })
 
-  it('sans titre : "Prénom Nom" seul NON détecté (conservateur — évite faux positifs Le Dahu, Maison X)', () => {
-    // Cyril peut préfixer "M." s'il veut signaler explicitement
-    expect(estNomPersonne('Jean-Marc Fellay')).toBe(false)
-    expect(estNomPersonne('Alberto Santos')).toBe(false)
-    expect(estNomPersonne('Paula Meyer')).toBe(false)
+  it('détecte "Prénom Nom" (2 mots capitalisés propres)', () => {
+    expect(estNomPersonne('Cedric Taramarcaz')).toBe(true)
+    expect(estNomPersonne('Alberto Santos')).toBe(true)
+    expect(estNomPersonne('Paula Meyer')).toBe(true)
   })
 
-  it('cas anti-faux-positifs : noms commerciaux courants non détectés', () => {
+  it('détecte prénoms composés (Anne-Marie, Jean-Marc)', () => {
+    expect(estNomPersonne('Anne-Marie Dubois')).toBe(true)
+    expect(estNomPersonne('Jean-Marc Fellay')).toBe(true)
+  })
+
+  it('détecte noms avec apostrophe (D\'Angelo, O\'Connor)', () => {
+    expect(estNomPersonne("Marco D'Angelo")).toBe(true)
+    expect(estNomPersonne("Sean O'Connor")).toBe(true)
+  })
+
+  it('cas anti-faux-positifs : préfixes commerciaux courants NON détectés', () => {
     expect(estNomPersonne('Le Dahu')).toBe(false)
+    expect(estNomPersonne('La Cambuse')).toBe(false)
+    expect(estNomPersonne('Les Cheminées')).toBe(false)
     expect(estNomPersonne('Maison Cocotte')).toBe(false)
     expect(estNomPersonne('Chez Pierre')).toBe(false)
-    expect(estNomPersonne('Aux Deux Cheminées')).toBe(false)
+    expect(estNomPersonne('Aux Amis')).toBe(false)
+    expect(estNomPersonne('Cave Fellay')).toBe(false)
+    expect(estNomPersonne('Café Central')).toBe(false)
+  })
+
+  it('cas anti-faux-positifs : ≥ 3 mots (probablement une enseigne longue)', () => {
+    expect(estNomPersonne('Restaurant Le Dahu SA')).toBe(false)
+    expect(estNomPersonne('Cambuse d\'Alberto Sàrl')).toBe(false)
+    expect(estNomPersonne('Jean-Marc Fellay Fils')).toBe(false)  // 3 mots → non détecté (limite volontaire)
   })
 
   it('EXCEPTION mot-clé commercial en tête → nom commercial (pas personne)', () => {

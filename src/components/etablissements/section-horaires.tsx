@@ -54,15 +54,18 @@ export function SectionHoraires({ etablissementId, horaires }: Props) {
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Horaires
         </h3>
-        <Badge
-          className={
-            ouvert
-              ? 'bg-emerald-500 hover:bg-emerald-500'
-              : 'bg-slate-400 hover:bg-slate-400'
-          }
-        >
-          {ouvert ? '🟢 Ouvert' : '🔴 Fermé'}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <BoutonRecupererGoogle etablissementId={etablissementId} mode="actualiser" />
+          <Badge
+            className={
+              ouvert
+                ? 'bg-emerald-500 hover:bg-emerald-500'
+                : 'bg-slate-400 hover:bg-slate-400'
+            }
+          >
+            {ouvert ? '🟢 Ouvert' : '🔴 Fermé'}
+          </Badge>
+        </div>
       </div>
       {!ouvert && prochaine && (
         <p className="text-sm text-muted-foreground">{prochaine}</p>

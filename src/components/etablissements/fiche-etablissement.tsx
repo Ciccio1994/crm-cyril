@@ -39,9 +39,39 @@ const LIBELLE_STATUT: Record<StatutCommercial, string> = {
   contentieux:         'Contentieux',
 }
 
+type ChampType = 'text' | 'tel' | 'email' | 'url'
+
 interface Champ {
   label: string
   valeur: string | null
+  type?: ChampType
+}
+
+// Auto-détecte le type d'un champ à partir de son label pour rendre le
+// contenu cliquable (tel:, mailto:, https://) — sur mobile Android/iOS,
+// tap sur un lien tel: ouvre l'app Téléphone directement.
+function detecterType(label: string, type?: ChampType): ChampType {
+  if (type) return type
+  const n = label.toLowerCase()
+  if (n.includes('tél') || n.includes('tel') || n.startsWith('mobile')) return 'tel'
+  if (n.includes('email') || n.includes('mail')) return 'email'
+  if (n.includes('site')) return 'url'
+  return 'text'
+}
+
+function ValeurChamp({ valeur, type }: { valeur: string; type: ChampType }) {
+  const commun = 'text-primary underline decoration-primary/40 underline-offset-2'
+  if (type === 'tel') {
+    return <a href={`tel:${valeur.replace(/\s+/g, '')}`} className={commun}>{valeur}</a>
+  }
+  if (type === 'email') {
+    return <a href={`mailto:${valeur}`} className={commun}>{valeur}</a>
+  }
+  if (type === 'url') {
+    const href = valeur.startsWith('http') ? valeur : `https://${valeur}`
+    return <a href={href} target="_blank" rel="noopener noreferrer" className={commun}>{valeur}</a>
+  }
+  return <>{valeur}</>
 }
 
 function BlocInfos({ champs }: { champs: Champ[] }) {
@@ -49,14 +79,19 @@ function BlocInfos({ champs }: { champs: Champ[] }) {
   if (visibles.length === 0) return null
   return (
     <dl className="divide-y divide-border rounded-lg border bg-card">
-      {visibles.map((c) => (
-        <div key={c.label} className="grid grid-cols-3 gap-2 px-3 py-2.5">
-          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-            {c.label}
-          </dt>
-          <dd className="col-span-2 text-sm">{c.valeur}</dd>
-        </div>
-      ))}
+      {visibles.map((c) => {
+        const type = detecterType(c.label, c.type)
+        return (
+          <div key={c.label} className="grid grid-cols-3 gap-2 px-3 py-2.5">
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+              {c.label}
+            </dt>
+            <dd className="col-span-2 break-words text-sm">
+              <ValeurChamp valeur={c.valeur!} type={type} />
+            </dd>
+          </div>
+        )
+      })}
     </dl>
   )
 }
