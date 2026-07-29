@@ -26,6 +26,46 @@ interface DecisionOutil {
 }
 
 /**
+ * Parseur SSE spec-compliant (WHATWG HTML EventSource).
+ *
+ * Prend un buffer et retourne les événements complets + le reste incomplet.
+ * Gère :
+ * - Normalisation des fins de ligne : CRLF, CR, LF (crucial pour Android Chrome
+ *   où Vercel/HTTP2 peut renvoyer CRLF alors que desktop reçoit LF)
+ * - Multi-lignes `data:` (concaténées avec \n dans la valeur)
+ * - `data:X` (sans espace) et `data: X` (avec espace, skippé)
+ * - Lignes commentaires (commencent par `:`)
+ * - Champ `event:` optionnel (défaut `message`)
+ */
+export function parseSSEBuffer(bufferBrut: string): {
+  events: Array<{ event: string; data: string }>
+  rest: string
+} {
+  // Normalise CRLF et CR isolés vers LF (spec SSE §9.2.5)
+  const buffer = bufferBrut.replace(/\r\n|\r/g, '\n')
+  const parts = buffer.split('\n\n')
+  const rest = parts.pop() ?? ''
+  const events: Array<{ event: string; data: string }> = []
+
+  for (const part of parts) {
+    if (!part.trim()) continue
+    let event = 'message'
+    let data = ''
+    for (const rawLigne of part.split('\n')) {
+      if (rawLigne === '' || rawLigne.startsWith(':')) continue
+      const idx = rawLigne.indexOf(':')
+      const champ = idx === -1 ? rawLigne : rawLigne.slice(0, idx)
+      let valeur = idx === -1 ? '' : rawLigne.slice(idx + 1)
+      if (valeur.startsWith(' ')) valeur = valeur.slice(1)
+      if (champ === 'event') event = valeur
+      else if (champ === 'data') data = data === '' ? valeur : `${data}\n${valeur}`
+    }
+    events.push({ event, data })
+  }
+  return { events, rest }
+}
+
+/**
  * Hook client pour le chat Claude avec streaming SSE.
  * Consomme les endpoints /api/chat/stream et /api/chat/confirmer via fetch + ReadableStream.
  * (EventSource non utilisé car les deux endpoints sont POST.)
@@ -91,27 +131,22 @@ export function useChat(conversationId: string, etablissementId?: string) {
         if (done) break
         buffer += decoder.decode(value, { stream: true })
 
-        // Chaque événement SSE est séparé par "\n\n"
-        const blocs = buffer.split('\n\n')
-        // Le dernier élément peut être un bloc incomplet — on le remet en buffer
-        buffer = blocs.pop() ?? ''
+        // Parseur SSE spec-compliant (voir parseSSEBuffer en haut du fichier)
+        const { events: evenements, rest } = parseSSEBuffer(buffer)
+        buffer = rest
 
-        for (const raw of blocs) {
-          if (!raw.trim()) continue
-          const lignes = raw.split('\n')
-          const event = lignes
-            .find((l) => l.startsWith('event: '))
-            ?.slice(7)
-            .trim()
-          const dataLine = lignes.find((l) => l.startsWith('data: '))?.slice(6)
-          if (!event || !dataLine) continue
+        for (const { event, data: dataLine } of evenements) {
+          if (event === 'message' && !dataLine) continue
+          if (!dataLine) continue
 
           let data: unknown
           try {
             data = JSON.parse(dataLine)
           } catch (err) {
             console.error('[Chat] JSON.parse échec', {
+              event,
               dataLine_type: typeof dataLine,
+              dataLine_length: dataLine.length,
               dataLine_preview: String(dataLine).slice(0, 300),
               erreur_message: (err as Error)?.message,
               erreur_stack: (err as Error)?.stack,

@@ -140,9 +140,11 @@ export async function POST(req: NextRequest) {
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform, no-store',
       Connection: 'keep-alive',
+      // Empêche nginx/proxies mobiles de bufferiser (crucial pour Chrome Android)
+      'X-Accel-Buffering': 'no',
     },
   })
 }
