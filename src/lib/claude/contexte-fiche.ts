@@ -23,7 +23,7 @@ export async function chargerContexteFiche(etablissementId: string): Promise<Con
       .is('deleted_at', null)
       .order('date_visite', { ascending: false })
       .limit(3),
-    supabase.from('offre').select('*').is('deleted_at', null),
+    supabase.from('offre').select('*').is('deleted_at', null).limit(20),
   ])
 
   if (!e) return null

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ActionEnAttente } from '@/types/conversation'
 import type { EtatMonitoring } from '@/lib/claude/monitoring'
 
@@ -39,6 +39,11 @@ export function useChat(conversationId: string, etablissementId?: string) {
     erreur: null,
   })
   const abortRef = useRef<AbortController | null>(null)
+
+  // Cleanup : abort la requête SSE quand le composant unmount
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
 
   /**
    * Consomme un flux SSE depuis un endpoint POST.

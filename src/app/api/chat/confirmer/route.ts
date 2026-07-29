@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { MODELES, type ModeleClaude } from '@/types/conversation'
 import { construireSystemePrompt } from '@/lib/claude/systeme'
@@ -8,23 +9,28 @@ import { executerOutil } from '@/lib/claude/executeur-outils'
 import { ajouterConsommation } from '@/lib/claude/monitoring'
 import { chargerContexteFiche } from '@/lib/claude/contexte-fiche'
 
-interface DecisionOutil {
-  tool_use_id: string
-  nom_outil: NomOutil
-  parametres: unknown
-  accepte: boolean
-}
-
-interface Body {
-  conversationId: string
-  etablissementId?: string
-  decisions: DecisionOutil[]
-}
+const confirmerBodySchema = z.object({
+  conversationId: z.string().uuid(),
+  etablissementId: z.string().uuid().optional(),
+  decisions: z.array(z.object({
+    tool_use_id: z.string(),
+    nom_outil: z.enum(['creerRappel', 'creerVisite', 'mettreAJourHoraires', 'mettreAJourEtablissement', 'lireVisites', 'chercherEtablissements']),
+    parametres: z.unknown(),
+    accepte: z.boolean(),
+  })).min(1),
+})
 
 const client = new Anthropic()
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json()) as Body
+  const raw = await req.json()
+  const parsed = confirmerBodySchema.safeParse(raw)
+  if (!parsed.success) {
+    return new Response(JSON.stringify({ erreur: parsed.error.issues.map(i => i.message).join(' — ') }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  const body = parsed.data as { conversationId: string; etablissementId?: string; decisions: Array<{ tool_use_id: string; nom_outil: NomOutil; parametres: unknown; accepte: boolean }> }
 
   const supabase = await createClient()
   const { data: conv } = await supabase
@@ -74,6 +80,10 @@ export async function POST(req: NextRequest) {
         )
       }
 
+      // Abort signal : annule l'appel Anthropic quand le client coupe la connexion
+      const abortCtrl = new AbortController()
+      req.signal.addEventListener('abort', () => abortCtrl.abort())
+
       try {
         // Un seul appel : Claude ack les tool_results et répond en end_turn
         const anthStream = client.messages.stream({
@@ -82,7 +92,7 @@ export async function POST(req: NextRequest) {
           system: construireSystemePrompt(contexte ?? undefined),
           tools: OUTILS_CLAUDE,
           messages,
-        })
+        }, { signal: abortCtrl.signal })
 
         anthStream.on('text', (delta) => send('text_delta', { delta }))
 
@@ -104,9 +114,12 @@ export async function POST(req: NextRequest) {
         send('monitoring', monitoring)
         send('done', { conversation_id: body.conversationId, en_attente: false })
       } catch (e) {
-        send('erreur', {
-          message: e instanceof Error ? e.message : 'Erreur inconnue',
-        })
+        if ((e as Error).name === 'AbortError' || req.signal.aborted) {
+          // Client a coupé : sortir silencieusement
+          controller.close()
+          return
+        }
+        send('erreur', { message: e instanceof Error ? e.message : 'Erreur inconnue' })
       } finally {
         controller.close()
       }

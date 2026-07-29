@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { MODELES, type ModeleClaude } from '@/types/conversation'
 import { construireSystemePrompt } from '@/lib/claude/systeme'
@@ -14,17 +15,25 @@ import { ajouterConsommation } from '@/lib/claude/monitoring'
 import { genererTitreConversation } from '@/actions/chat'
 import { chargerContexteFiche } from '@/lib/claude/contexte-fiche'
 
+const streamBodySchema = z.object({
+  conversationId: z.string().uuid(),
+  message: z.string().min(1),
+  imageUrl: z.string().url().optional(),
+  etablissementId: z.string().uuid().optional(),
+})
+
 const client = new Anthropic()
 const MAX_ITERATIONS = 6
 
 export async function POST(req: NextRequest) {
-  const { conversationId, message, imageUrl, etablissementId } =
-    (await req.json()) as {
-      conversationId: string
-      message: string
-      imageUrl?: string
-      etablissementId?: string
-    }
+  const raw = await req.json()
+  const parsed = streamBodySchema.safeParse(raw)
+  if (!parsed.success) {
+    return new Response(JSON.stringify({ erreur: parsed.error.issues.map(i => i.message).join(' — ') }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  const { conversationId, message, imageUrl, etablissementId } = parsed.data
 
   const supabase = await createClient()
   const { data: conv } = await supabase
@@ -64,6 +73,10 @@ export async function POST(req: NextRequest) {
         )
       }
 
+      // Abort signal : annule l'appel Anthropic quand le client coupe la connexion
+      const abortCtrl = new AbortController()
+      req.signal.addEventListener('abort', () => abortCtrl.abort())
+
       try {
         for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
           const anthStream = client.messages.stream({
@@ -72,12 +85,15 @@ export async function POST(req: NextRequest) {
             system: construireSystemePrompt(contexte ?? undefined),
             tools: OUTILS_CLAUDE,
             messages,
-          })
+          }, { signal: abortCtrl.signal })
 
           // Streame les deltas texte au client en temps réel
           anthStream.on('text', (delta) => send('text_delta', { delta }))
 
           const finalMsg = await anthStream.finalMessage()
+          // NB : input_tokens inclut à chaque itération le prompt système + définitions
+          // d'outils + historique cumulé. Le compteur peut sembler 3-4× plus élevé que
+          // le volume "perçu" utilisateur — c'est normal (coût réel API).
           tokensIn += finalMsg.usage.input_tokens
           tokensOut += finalMsg.usage.output_tokens
           messages.push({ role: 'assistant', content: finalMsg.content })
@@ -161,9 +177,12 @@ export async function POST(req: NextRequest) {
         void genererTitreConversation(conversationId).catch(() => {})
         send('done', { conversation_id: conversationId, en_attente: false })
       } catch (e) {
-        send('erreur', {
-          message: e instanceof Error ? e.message : 'Erreur inconnue',
-        })
+        if ((e as Error).name === 'AbortError' || req.signal.aborted) {
+          // Client a coupé : sortir silencieusement
+          controller.close()
+          return
+        }
+        send('erreur', { message: e instanceof Error ? e.message : 'Erreur inconnue' })
       } finally {
         controller.close()
       }
