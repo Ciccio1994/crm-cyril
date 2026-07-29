@@ -17,6 +17,7 @@ import { OngletContacts } from '@/components/contacts/onglet-contacts'
 import { OngletVisites } from '@/components/visites/onglet-visites'
 import { ActionsRapides } from './actions-rapides'
 import { CarteOffre } from '@/components/offres/carte-offre'
+import { SectionHoraires } from './section-horaires'
 import type {
   Contact,
   Etablissement,
@@ -167,6 +168,7 @@ export function FicheEtablissement({
               </p>
             </div>
           )}
+          <SectionHoraires horaires={etablissement.horaires_ouverture} />
           {offresActives.length > 0 && (
             <section className="space-y-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
