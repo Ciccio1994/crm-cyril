@@ -1,3 +1,5 @@
+import type { Horaires } from './horaires'
+
 // Enums (miroir des types Postgres)
 export type StatutCommercial =
   | 'prospect'
@@ -74,6 +76,8 @@ export interface Etablissement {
   horaires_libre: string | null
   notes_internes: string | null
   seuil_inactivite_mois: number
+  horaires_ouverture: Horaires | null
+  jours_fermeture_annuelle: string[] | null
   entreprise_id: string | null
   tournee_id: string | null
   derniere_visite_at: string | null
