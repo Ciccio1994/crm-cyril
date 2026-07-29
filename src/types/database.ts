@@ -85,6 +85,7 @@ export interface Etablissement {
   // Relations (optionnelles, chargées si select avec join)
   tournee?: Tournee
   entreprise?: Entreprise
+  contacts?: Contact[]
   created_at: string
   updated_at: string
   deleted_at: string | null

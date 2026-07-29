@@ -36,6 +36,11 @@ export function CarteEtablissement({ etablissement, retard }: CarteEtablissement
             <h2 className="truncate text-base font-semibold leading-tight">
               {etablissement.enseigne}
             </h2>
+            {etablissement.code_schenk && (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
+                N° {etablissement.code_schenk}
+              </p>
+            )}
             {villeLigne && (
               <p className="mt-0.5 truncate text-sm text-muted-foreground">
                 {villeLigne}

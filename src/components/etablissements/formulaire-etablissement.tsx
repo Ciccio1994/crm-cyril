@@ -233,6 +233,18 @@ export function FormulaireEtablissement({
               className="h-12 text-base"
             />
           </div>
+          {mode === 'edition' && initial?.code_schenk && (
+            <div className="space-y-1.5">
+              <Label htmlFor="code_schenk">N° Schenk</Label>
+              <Input
+                id="code_schenk"
+                value={initial.code_schenk}
+                readOnly
+                disabled
+                className="h-12 bg-muted text-base text-muted-foreground"
+              />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="statut">Statut</Label>
             <Select

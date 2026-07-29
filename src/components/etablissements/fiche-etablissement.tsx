@@ -91,6 +91,11 @@ export function FicheEtablissement({
             <h1 className="truncate text-lg font-semibold leading-tight">
               {etablissement.enseigne}
             </h1>
+            {etablissement.code_schenk && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                N° {etablissement.code_schenk}
+              </p>
+            )}
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <Badge variant="outline" className="font-normal">
                 {LIBELLE_STATUT[etablissement.statut]}

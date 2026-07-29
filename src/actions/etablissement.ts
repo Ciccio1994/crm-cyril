@@ -75,7 +75,7 @@ export async function lireEtablissements(
 
   let query = supabase
     .from('etablissement')
-    .select('*, tournee(id, nom, frequence_semaines)')
+    .select('*, tournee(id, nom, frequence_semaines), contacts:contact(*)')
     .is('deleted_at', null)
 
   if (filtres.tournee_id) query = query.eq('tournee_id', filtres.tournee_id)
@@ -87,7 +87,12 @@ export async function lireEtablissements(
 
   const { data, error } = await query.order('enseigne', { ascending: true })
   if (error) return { erreur: { message: error.message } }
-  return { data: data as Etablissement[] }
+  // Filtre les contacts soft-deleted côté client (Supabase n'accepte pas de filtre nested inline simple).
+  const filtered = (data as Etablissement[]).map((e) => ({
+    ...e,
+    contacts: e.contacts?.filter((c) => c.deleted_at === null),
+  }))
+  return { data: filtered }
 }
 
 export async function lireEtablissement(id: string): Promise<ActionResult<Etablissement>> {

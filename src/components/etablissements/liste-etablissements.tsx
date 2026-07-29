@@ -15,6 +15,7 @@ import { CarteEtablissement } from './carte-etablissement'
 import { cn } from '@/lib/utils'
 import { calculerRetard } from '@/lib/retard'
 import { estOuvertMaintenant } from '@/lib/horaires/regles'
+import { correspondRecherche, normaliserRecherche } from '@/lib/etablissements/recherche'
 import type { Etablissement, StatutCommercial } from '@/types/database'
 
 interface ListeEtablissementsProps {
@@ -51,18 +52,12 @@ export function ListeEtablissements({ etablissements }: ListeEtablissementsProps
   const maintenantIso = useMemo(() => new Date().toISOString(), [])
 
   const filtres = useMemo(() => {
-    const q = recherche.trim().toLowerCase()
+    const q = normaliserRecherche(recherche)
     return etablissements.filter((e) => {
       if (statut !== 'tous' && e.statut !== statut) return false
       if (tourneeId !== 'toutes' && e.tournee_id !== tourneeId) return false
       if (ouvertMaintenant && !estOuvertMaintenant(e.horaires_ouverture)) return false
-      if (q) {
-        const combo = [e.enseigne, e.ville, e.code_postal]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-        if (!combo.includes(q)) return false
-      }
+      if (!correspondRecherche(e, q)) return false
       return true
     })
   }, [etablissements, recherche, statut, tourneeId, ouvertMaintenant])
@@ -79,7 +74,7 @@ export function ListeEtablissements({ etablissements }: ListeEtablissementsProps
         <Input
           type="search"
           inputMode="search"
-          placeholder="Rechercher enseigne, ville…"
+          placeholder="Rechercher enseigne, contact, code, tél, ville…"
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
           className="h-11"

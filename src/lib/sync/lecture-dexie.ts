@@ -4,8 +4,20 @@ import { db } from '@/lib/db/dexie'
 import type { Contact, Etablissement, Offre, Visite } from '@/types/database'
 
 export async function lireEtablissementsDexie(): Promise<Etablissement[]> {
-  const all = await db.etablissements.toArray()
-  return all.filter((e) => e.deleted_at === null)
+  const [etabs, contacts] = await Promise.all([
+    db.etablissements.toArray(),
+    db.contacts.toArray(),
+  ])
+  const parEtab = new Map<string, Contact[]>()
+  for (const c of contacts) {
+    if (c.deleted_at !== null) continue
+    const arr = parEtab.get(c.etablissement_id) ?? []
+    arr.push(c)
+    parEtab.set(c.etablissement_id, arr)
+  }
+  return etabs
+    .filter((e) => e.deleted_at === null)
+    .map((e) => ({ ...e, contacts: parEtab.get(e.id) ?? [] }))
 }
 
 export async function lireEtablissementDexie(id: string): Promise<Etablissement | null> {
