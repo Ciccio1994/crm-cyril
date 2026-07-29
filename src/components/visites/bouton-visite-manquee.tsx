@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { creerVisiteManquee } from '@/actions/visite'
+import { executerAvecSync } from '@/lib/sync/wrapper'
 import type { MotifVisiteManquee } from '@/types/database'
 
 interface BoutonVisiteManqueeProps {
@@ -32,12 +33,15 @@ export function BoutonVisiteManquee({
 
   function enregistrer(motif: MotifVisiteManquee | null) {
     const iso = new Date().toISOString()
+    const payload = {
+      etablissement_id: etablissementId,
+      date_visite: iso,
+      motif_manquee: motif,
+    }
     startTransition(async () => {
-      await creerVisiteManquee({
-        etablissement_id: etablissementId,
-        date_visite: iso,
-        motif_manquee: motif,
-      })
+      await executerAvecSync('creerVisiteManquee', payload, (p) =>
+        creerVisiteManquee(p),
+      )
       onSuccess()
       setOpen(false)
     })

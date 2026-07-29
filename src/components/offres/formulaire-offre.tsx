@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import {
   creerOffre, mettreAJourOffre, supprimerOffre, uploadOffrePdf,
 } from '@/actions/offres'
+import { executerAvecSync, executerAvecSyncCible } from '@/lib/sync/wrapper'
 import type { Offre } from '@/types/database'
 
 interface Props { mode: 'creation' | 'edition'; initial?: Offre }
@@ -90,10 +91,13 @@ export function FormulaireOffre({ mode, initial }: Props) {
     const payload = payloadFromState(state)
     startTransition(async () => {
       const r = mode === 'creation'
-        ? await creerOffre(payload)
-        : await mettreAJourOffre(initial!.id, payload)
+        ? await executerAvecSync('creerOffre', payload, (p) => creerOffre(p))
+        : await executerAvecSyncCible(
+            'mettreAJourOffre', initial!.id, payload,
+            (id, p) => mettreAJourOffre(id, p),
+          )
       if (r.erreur) {
-        setErreur(r.erreur)
+        setErreur(typeof r.erreur === 'string' ? r.erreur : 'Erreur')
         return
       }
       router.push('/admin/offres')
@@ -104,7 +108,10 @@ export function FormulaireOffre({ mode, initial }: Props) {
     if (!initial) return
     if (!window.confirm(`Supprimer l'offre "${initial.cuvee_text}" ?`)) return
     startTransition(async () => {
-      await supprimerOffre(initial.id)
+      await executerAvecSyncCible(
+        'supprimerOffre', initial.id, {},
+        (id) => supprimerOffre(id),
+      )
       router.push('/admin/offres')
     })
   }

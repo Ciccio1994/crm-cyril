@@ -19,6 +19,7 @@ import {
   creerEtablissement,
   mettreAJourEtablissement,
 } from '@/actions/etablissement'
+import { executerAvecSync, executerAvecSyncCible } from '@/lib/sync/wrapper'
 import { ChampAdresseAutocomplete } from './champ-adresse-autocomplete'
 import type { DetailsLieu } from '@/lib/geocode'
 import type {
@@ -171,13 +172,25 @@ export function FormulaireEtablissement({
     startTransition(async () => {
       const result =
         mode === 'creation'
-          ? await creerEtablissement(payload)
-          : await mettreAJourEtablissement(initial!.id, payload)
+          ? await executerAvecSync(
+              'creerEtablissement', payload,
+              (p) => creerEtablissement(p),
+            )
+          : await executerAvecSyncCible(
+              'mettreAJourEtablissement', initial!.id, payload,
+              (id, p) => mettreAJourEtablissement(id, p),
+            )
       if (result.erreur) {
         setErreur('Impossible d\'enregistrer. Vérifie les champs.')
         return
       }
-      const id = mode === 'creation' ? result.data?.id : initial!.id
+      // Si offline (differee), on renvoie vers la liste plutôt que la fiche (id inconnu)
+      if ('differee' in result && result.differee) {
+        router.push('/etablissements')
+        return
+      }
+      const dataId = (result.data as { id?: string } | undefined)?.id
+      const id = mode === 'creation' ? dataId : initial!.id
       if (id) router.push(`/etablissements/${id}`)
     })
   }

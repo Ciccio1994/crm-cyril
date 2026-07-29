@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { creerVisite } from '@/actions/visite'
+import { executerAvecSync } from '@/lib/sync/wrapper'
 
 interface FormulaireVisiteProps {
   open: boolean
@@ -64,7 +65,7 @@ export function FormulaireVisite({
       prochaine_action: prochaineAction.trim() || null,
     }
     startTransition(async () => {
-      const result = await creerVisite(payload)
+      const result = await executerAvecSync('creerVisite', payload, (p) => creerVisite(p))
       if (result.erreur) {
         setErreur('Impossible d\'enregistrer la visite.')
         return

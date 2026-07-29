@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { telHref } from '@/lib/format'
 import { supprimerContact } from '@/actions/contact'
+import { executerAvecSyncCible } from '@/lib/sync/wrapper'
 import { FormulaireContact } from './formulaire-contact'
 import type { Contact } from '@/types/database'
 
@@ -42,7 +43,10 @@ export function OngletContacts({
     )
       return
     startTransition(async () => {
-      await supprimerContact(contact.id)
+      await executerAvecSyncCible(
+        'supprimerContact', contact.id, {},
+        (id) => supprimerContact(id),
+      )
       router.refresh()
     })
   }

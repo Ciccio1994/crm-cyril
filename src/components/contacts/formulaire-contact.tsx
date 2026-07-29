@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { creerContact, mettreAJourContact } from '@/actions/contact'
+import { executerAvecSync, executerAvecSyncCible } from '@/lib/sync/wrapper'
 import {
   isContactPickerSupported,
   selectContact as pickContactFromDevice,
@@ -116,8 +117,15 @@ export function FormulaireContact({
 
     startTransition(async () => {
       const result = contact
-        ? await mettreAJourContact(contact.id, payload)
-        : await creerContact({ ...payload, etablissement_id: etablissementId })
+        ? await executerAvecSyncCible(
+            'mettreAJourContact', contact.id, payload,
+            (id, p) => mettreAJourContact(id, p),
+          )
+        : await executerAvecSync(
+            'creerContact',
+            { ...payload, etablissement_id: etablissementId },
+            (p) => creerContact(p),
+          )
       if (result.erreur) {
         setErreur('Impossible d\'enregistrer.')
         return
