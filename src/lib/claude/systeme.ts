@@ -49,7 +49,19 @@ export function construireSystemePrompt(contexte?: ContexteFiche): string {
 
   if (contexte) {
     const { etablissement: e, contacts, dernieres_visites: visites, offres_actives, horaires } = contexte
-    parts.push('', `### Contexte fiche : ${e.enseigne}`)
+    parts.push('', `### 🔒 Chat contextuel — établissement : ${e.enseigne}`)
+    parts.push('',
+      `**Règle absolue** : cette conversation est verrouillée sur l'établissement **${e.enseigne}** (id \`${e.id}\`).`,
+      `TOUTES les questions et demandes de Cyril concernent CET établissement, sauf mention explicite du contraire`,
+      `(ex : "sur un autre client", "chez X", nom d'un autre client cité clairement).`,
+      '',
+      `Conséquences pratiques :`,
+      `- Les pronoms flous ("il", "elle", "l'", "chez lui", "là-bas") désignent **${e.enseigne}**.`,
+      `- Les intentions vagues ("mets un rappel", "note une visite", "envoie un email de relance") s'appliquent à **${e.enseigne}**.`,
+      `- **Passe TOUJOURS \`etablissement_id: "${e.id}"\` aux outils** \`creerRappel\`, \`creerVisite\`, \`mettreAJourHoraires\`, \`mettreAJourEtablissement\`. Ne redemande jamais quel client est concerné.`,
+      `- Si Cyril demande une info sur un AUTRE client, dis-lui d'ouvrir /chat général ou d'ouvrir la fiche de cet autre client.`,
+    )
+    parts.push('', `### Données de contexte`)
     if (e.code_schenk) parts.push(`Code Schenk : ${e.code_schenk}`)
     parts.push(`Statut : ${e.statut}`)
     if (e.ville) parts.push(`Ville : ${[e.code_postal, e.ville].filter(Boolean).join(' ')}`)
@@ -72,7 +84,6 @@ export function construireSystemePrompt(contexte?: ContexteFiche): string {
       for (const o of offres_actives) parts.push(`- ${o.cuvee_text}${o.prix_promo_chf ? ` — ${o.prix_promo_chf} CHF` : ''}`)
     }
     if (horaires) parts.push('', `Horaires : ${JSON.stringify(horaires)}`)
-    parts.push('', `ID de cet établissement (à passer aux outils) : ${e.id}`)
   }
 
   return parts.join('\n')

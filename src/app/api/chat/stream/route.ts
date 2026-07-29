@@ -118,7 +118,9 @@ export async function POST(req: NextRequest) {
           )
 
           if (modifications.length > 0) {
-            // Envoie chaque action de modification au client pour confirmation
+            // Envoie chaque action de modification au client pour confirmation.
+            // En chat contextuel, l'enseigne est incluse dans la description humaine.
+            const enseigneContexte = contexte?.etablissement.enseigne
             for (const t of modifications) {
               send('pending_action', {
                 tool_use_id: t.id,
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
                 description_humaine: descriptionHumaine(
                   t.name as NomOutil,
                   t.input as Record<string, unknown>,
+                  enseigneContexte,
                 ),
               })
             }
@@ -146,7 +149,10 @@ export async function POST(req: NextRequest) {
             return
           }
 
-          // Tous les outils sont des lectures : exécute et continue la boucle
+          // Tous les outils sont des lectures : exécute et continue la boucle.
+          // En chat contextuel, on passe l'etablissement_id en fallback pour que
+          // lireVisites fonctionne même si Claude ne l'a pas passé.
+          const contexteEtabId = contexte?.etablissement.id ?? null
           const results: Anthropic.ToolResultBlockParam[] = []
           for (const t of toolUses) {
             console.error('[Stream] executerOutil', t.name, 'input type:', typeof t.input, 'input:', JSON.stringify(t.input)?.slice(0, 200))
@@ -154,6 +160,7 @@ export async function POST(req: NextRequest) {
               t.name as NomOutil,
               t.input,
               conversationId,
+              contexteEtabId,
             )
             console.error('[Stream] résultat outil', t.name, 'ok:', r.ok, 'contenu type:', typeof (r.ok ? r.contenu : r.erreur), 'preview:', String(r.ok ? r.contenu : r.erreur).slice(0, 200))
             results.push({

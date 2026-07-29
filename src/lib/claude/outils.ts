@@ -62,7 +62,15 @@ export const SCHEMAS_OUTILS = {
 } as const
 
 // Description "humaine" affichée dans l'UI pour la confirmation.
-export function descriptionHumaine(nom: NomOutil, params: Record<string, unknown>): string {
+// `enseigne` est fourni par l'appelant quand la chat est contextuelle (fiche fixée)
+// OU quand on peut résoudre le nom depuis l'etablissement_id passé par Claude.
+// Quand non résolu, la description reste générique (chat général sans client).
+export function descriptionHumaine(
+  nom: NomOutil,
+  params: Record<string, unknown>,
+  enseigne?: string,
+): string {
+  const suffixeClient = enseigne ? ` — chez ${enseigne}` : ''
   switch (nom) {
     case 'creerRappel': {
       const dt = new Date(params.echeance as string)
@@ -71,15 +79,15 @@ export function descriptionHumaine(nom: NomOutil, params: Record<string, unknown
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })
-      return `Créer un rappel : « ${params.titre} » pour le ${fmt.format(dt)}`
+      return `Créer un rappel${suffixeClient} : « ${params.titre} » pour le ${fmt.format(dt)}`
     }
     case 'creerVisite':
-      return `Enregistrer une visite (${params.duree_minutes} min)`
+      return `Enregistrer une visite${suffixeClient} (${params.duree_minutes} min)`
     case 'mettreAJourHoraires':
-      return `Mettre à jour les horaires d'ouverture`
+      return `Mettre à jour les horaires d'ouverture${suffixeClient}`
     case 'mettreAJourEtablissement': {
       const champs = Object.keys(params.champs as object)
-      return `Modifier la fiche : ${champs.join(', ')}`
+      return `Modifier la fiche${suffixeClient} : ${champs.join(', ')}`
     }
     default:
       return nom

@@ -9,23 +9,42 @@ export type ResultatOutil =
   | { ok: true;  contenu: string }
   | { ok: false; erreur: string }
 
+// Injecte l'etablissement_id du contexte quand Claude ne l'a pas passé (défensif).
+// N'écrase JAMAIS un id déjà présent — respecte le choix explicite de Claude.
+function forcerEtabId<T extends { etablissement_id?: string | null }>(
+  input: T,
+  contexteId?: string | null,
+): T {
+  if (!contexteId) return input
+  if (input.etablissement_id) return input
+  return { ...input, etablissement_id: contexteId }
+}
+
 export async function executerOutil(
   nom: NomOutil,
   input: unknown,
   conversationId: string | null,
+  contexteEtablissementId?: string | null,
 ): Promise<ResultatOutil> {
   switch (nom) {
     case 'creerRappel': {
       const p = SCHEMAS_OUTILS.creerRappel.safeParse(input)
       if (!p.success) return { ok: false, erreur: p.error.issues.map(i => i.message).join(' — ') }
-      const r = await creerRappel({ ...p.data, push_active: true }, 'claude', conversationId)
+      const payload = forcerEtabId(p.data, contexteEtablissementId)
+      const r = await creerRappel({ ...payload, push_active: true }, 'claude', conversationId)
       return r.erreur
         ? { ok: false, erreur: r.erreur }
         : { ok: true, contenu: `Rappel créé (id ${r.data!.id})` }
     }
 
     case 'creerVisite': {
-      const p = SCHEMAS_OUTILS.creerVisite.safeParse(input)
+      // Zod exige etablissement_id, mais Claude peut oublier en contexte fiche.
+      // On ré-injecte AVANT parse dans ce cas.
+      const inputAvecContext =
+        contexteEtablissementId && input && typeof input === 'object' && !('etablissement_id' in input)
+          ? { ...(input as object), etablissement_id: contexteEtablissementId }
+          : input
+      const p = SCHEMAS_OUTILS.creerVisite.safeParse(inputAvecContext)
       if (!p.success) return { ok: false, erreur: p.error.issues.map(i => i.message).join(' — ') }
       // VisiteCreateSchema attend date_visite en datetime ISO (sans offset obligatoire)
       const dateVisite = new Date().toISOString()
@@ -41,7 +60,11 @@ export async function executerOutil(
     }
 
     case 'mettreAJourHoraires': {
-      const p = SCHEMAS_OUTILS.mettreAJourHoraires.safeParse(input)
+      const inputAvecContext =
+        contexteEtablissementId && input && typeof input === 'object' && !('etablissement_id' in input)
+          ? { ...(input as object), etablissement_id: contexteEtablissementId }
+          : input
+      const p = SCHEMAS_OUTILS.mettreAJourHoraires.safeParse(inputAvecContext)
       if (!p.success) return { ok: false, erreur: p.error.issues.map(i => i.message).join(' — ') }
       const r = await mettreAJourEtablissement(p.data.etablissement_id, {
         horaires_ouverture: p.data.horaires,
@@ -52,7 +75,11 @@ export async function executerOutil(
     }
 
     case 'mettreAJourEtablissement': {
-      const p = SCHEMAS_OUTILS.mettreAJourEtablissement.safeParse(input)
+      const inputAvecContext =
+        contexteEtablissementId && input && typeof input === 'object' && !('id' in input)
+          ? { ...(input as object), id: contexteEtablissementId }
+          : input
+      const p = SCHEMAS_OUTILS.mettreAJourEtablissement.safeParse(inputAvecContext)
       if (!p.success) return { ok: false, erreur: p.error.issues.map(i => i.message).join(' — ') }
       const r = await mettreAJourEtablissement(p.data.id, p.data.champs)
       return r.erreur

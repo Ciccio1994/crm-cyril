@@ -30,6 +30,35 @@ describe('descriptionHumaine', () => {
     expect(d).toContain('enseigne')
     expect(d).toContain('ville')
   })
+
+  it('creerRappel + enseigne : mention "chez Le Dahu" dans la description', () => {
+    const d = descriptionHumaine('creerRappel', {
+      titre: 'Rappeler',
+      echeance: '2026-08-05T14:00:00+02:00',
+    }, 'Le Dahu')
+    expect(d).toContain('chez Le Dahu')
+    expect(d).toContain('Rappeler')
+  })
+
+  it('creerVisite + enseigne : mention chez X', () => {
+    const d = descriptionHumaine('creerVisite', { etablissement_id: 'uuid', duree_minutes: 90 }, 'Café Central')
+    expect(d).toContain('chez Café Central')
+    expect(d).toContain('90')
+  })
+
+  it('sans enseigne : description reste générique (chat général)', () => {
+    const d = descriptionHumaine('creerRappel', {
+      titre: 'Rappel général',
+      echeance: '2026-08-05T14:00:00+02:00',
+    })
+    expect(d).not.toContain('chez')
+    expect(d).toContain('Rappel général')
+  })
+
+  it('mettreAJourHoraires + enseigne', () => {
+    const d = descriptionHumaine('mettreAJourHoraires', { etablissement_id: 'uuid', horaires: {} }, 'Bar Y')
+    expect(d).toContain('chez Bar Y')
+  })
 })
 
 describe('SCHEMAS_OUTILS', () => {

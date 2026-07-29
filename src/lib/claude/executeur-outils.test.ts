@@ -326,3 +326,99 @@ describe('executerOutil — lireVisites', () => {
     if (!r.ok) expect(r.erreur).toBe('Erreur lecture visites : RLS denied')
   })
 })
+
+describe('executerOutil — fallback contexteEtablissementId (chat contextuel)', () => {
+  const CTX_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const RAPPEL_OK = {
+    data: {
+      id: 'r1', titre: 't', description: null, echeance: '2026-08-05T14:00:00+02:00',
+      statut: 'a_faire', canal: null, etablissement_id: CTX_ID, visite_id: null,
+      conversation_id: null, fait_at: null, push_active: true, cree_par: 'claude',
+      created_at: '', updated_at: '',
+    },
+  } as unknown as Awaited<ReturnType<typeof creerRappel>>
+
+  it('creerRappel : ré-injecte etablissement_id depuis contexte si Claude oublie', async () => {
+    mockCreerRappel.mockResolvedValue(RAPPEL_OK)
+
+    await executerOutil(
+      'creerRappel',
+      { titre: 'Test', echeance: '2026-08-05T14:00:00+02:00' },  // pas d'etablissement_id
+      null,
+      CTX_ID,
+    )
+
+    expect(mockCreerRappel).toHaveBeenCalledWith(
+      expect.objectContaining({ etablissement_id: CTX_ID }),
+      'claude',
+      null,
+    )
+  })
+
+  it('creerRappel : N\'ECRASE PAS un etablissement_id explicite passé par Claude', async () => {
+    const AUTRE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    mockCreerRappel.mockResolvedValue(RAPPEL_OK)
+
+    await executerOutil(
+      'creerRappel',
+      { titre: 'Test', echeance: '2026-08-05T14:00:00+02:00', etablissement_id: AUTRE_ID },
+      null,
+      CTX_ID,
+    )
+
+    expect(mockCreerRappel).toHaveBeenCalledWith(
+      expect.objectContaining({ etablissement_id: AUTRE_ID }),
+      'claude',
+      null,
+    )
+  })
+
+  it('creerVisite : ré-injecte etablissement_id depuis contexte (Zod exige le champ)', async () => {
+    const { creerVisite } = await import('@/actions/visite')
+    const mockCreerVisite = vi.mocked(creerVisite)
+    mockCreerVisite.mockResolvedValue({
+      data: { id: 'v1' },
+    } as unknown as Awaited<ReturnType<typeof creerVisite>>)
+
+    const r = await executerOutil(
+      'creerVisite',
+      { duree_minutes: 60 },  // pas d'etablissement_id — Zod échouerait sans le fallback
+      null,
+      CTX_ID,
+    )
+
+    expect(r.ok).toBe(true)
+    expect(mockCreerVisite).toHaveBeenCalledWith(
+      expect.objectContaining({ etablissement_id: CTX_ID, duree_minutes: 60 }),
+    )
+  })
+
+  it('sans contexte : creerVisite sans etablissement_id échoue en Zod', async () => {
+    const r = await executerOutil(
+      'creerVisite',
+      { duree_minutes: 60 },
+      null,
+      null,
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('mettreAJourEtablissement : ré-injecte id depuis contexte', async () => {
+    mockMettreAJourEtablissement.mockResolvedValue({
+      data: {} as unknown as Awaited<ReturnType<typeof mettreAJourEtablissement>>['data'],
+    })
+
+    const r = await executerOutil(
+      'mettreAJourEtablissement',
+      { champs: { ville: 'Sion' } },  // pas d'id — fallback nécessaire
+      null,
+      CTX_ID,
+    )
+
+    expect(r.ok).toBe(true)
+    expect(mockMettreAJourEtablissement).toHaveBeenCalledWith(
+      CTX_ID,
+      expect.objectContaining({ ville: 'Sion' }),
+    )
+  })
+})

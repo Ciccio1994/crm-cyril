@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       continue
     }
     console.error('[Confirmer] executerOutil', d.nom_outil, 'parametres type:', typeof d.parametres, 'parametres:', JSON.stringify(d.parametres)?.slice(0, 200))
-    const r = await executerOutil(d.nom_outil, d.parametres, body.conversationId)
+    const r = await executerOutil(d.nom_outil, d.parametres, body.conversationId, contexte?.etablissement.id ?? null)
     console.error('[Confirmer] résultat outil', d.nom_outil, 'ok:', r.ok, 'contenu type:', typeof (r.ok ? r.contenu : r.erreur), 'preview:', String(r.ok ? r.contenu : r.erreur).slice(0, 200))
     results.push({
       type: 'tool_result',
