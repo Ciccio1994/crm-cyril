@@ -45,14 +45,37 @@ function cell(row: unknown[], idx: number | undefined): string | null {
   return s === '' ? null : s
 }
 
-function buildNotesInternes(row: unknown[], mapping: Mapping): string | null {
-  const nom1 = cell(row, mapping.notes_nom_1)
-  const nom2 = cell(row, mapping.notes_nom_2)
+function buildNotesInternes(
+  row: unknown[],
+  mapping: Mapping,
+  exclureNom1 = false,
+  exclureNom2 = false,
+): string | null {
+  const nom1 = exclureNom1 ? null : cell(row, mapping.notes_nom_1)
+  const nom2 = exclureNom2 ? null : cell(row, mapping.notes_nom_2)
   if (!nom1 && !nom2) return null
   const parts: string[] = []
   if (nom1) parts.push(`Nom raison sociale: ${nom1}`)
   if (nom2) parts.push(nom2)
   return parts.join(' / ')
+}
+
+// Mots-clés déclenchant la détection "adresse déguisée en enseigne".
+// Rangés par ordre décroissant de fréquence pour lire vite. Case-insensitive.
+const MOTS_CLES_ADRESSE = [
+  'chemin', 'rue', 'route', 'rte', 'avenue', 'av.', 'av ',
+  'impasse', 'chalet', 'batiment', 'bat.', 'bat ',
+  'immeuble', 'place', 'ch.', 'ch ',
+  'voie', 'sentier', 'passage',
+]
+
+// Retourne true si la valeur commence par un mot-clé adresse (case-insensitive,
+// accents ignorés). Utilisé pour détecter les cas où la colonne "Adresse" de
+// l'Excel Schenk contient une adresse au lieu du nom commercial (bug d'origine).
+export function estAdresseDeguisee(valeur: string | null): boolean {
+  if (!valeur) return false
+  const n = valeur.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  return MOTS_CLES_ADRESSE.some((m) => n.startsWith(m))
 }
 
 // Règle téléphones :
@@ -79,7 +102,36 @@ export function parseLigne(
   row: unknown[],
   mapping: Mapping,
 ): PayloadImport | null {
-  const enseigne = cell(row, mapping.enseigne)
+  let enseigne = cell(row, mapping.enseigne)
+  let adresse_ligne_1 = cell(row, mapping.adresse_ligne_1)
+  let exclureNom1 = false
+  let exclureNom2 = false
+
+  // Correction "adresse déguisée en enseigne" :
+  //
+  // En format Schenk full, la colonne « Adresse » sert de nom commercial (enseigne).
+  // Mais dans certaines lignes elle contient réellement une adresse (« Chemin de
+  // Rossaix 12 ») et le vrai nom est dans « Nom 2 ». Si l'enseigne extraite
+  // commence par un mot-clé adresse, on remonte enseigne depuis Nom 2 (fallback Nom)
+  // et on déplace la valeur dans adresse_ligne_1.
+  //
+  // Ne s'applique que si notes_nom_1 ou notes_nom_2 sont mappés (format full Schenk).
+  const enModeSchenkFull =
+    mapping.notes_nom_1 !== undefined || mapping.notes_nom_2 !== undefined
+
+  if (enModeSchenkFull && estAdresseDeguisee(enseigne)) {
+    const nom2 = cell(row, mapping.notes_nom_2)
+    const nom1 = cell(row, mapping.notes_nom_1)
+    const nouveauNom = nom2 ?? nom1
+    if (nouveauNom) {
+      adresse_ligne_1 = enseigne
+      enseigne = nouveauNom
+      // Éviter de dupliquer dans notes_internes la valeur remontée en enseigne.
+      if (nom2 !== null) exclureNom2 = true
+      else if (nom1 !== null) exclureNom1 = true
+    }
+  }
+
   if (!enseigne) return null
 
   const { telephone_principal, telephone_mobile } = extraireTelephones(row, mapping)
@@ -100,14 +152,14 @@ export function parseLigne(
     enseigne,
     code_schenk:          cell(row, mapping.code_schenk),
     statut:               mapperStatut(cell(row, mapping.statut)),
-    adresse_ligne_1:      cell(row, mapping.adresse_ligne_1),
+    adresse_ligne_1,
     code_postal:          cell(row, mapping.code_postal),
     ville:                cell(row, mapping.ville),
     telephone_principal,
     telephone_mobile,
     email:                cell(row, mapping.email),
     groupe_prix:          mapperGroupePrix(cell(row, mapping.groupe_prix)),
-    notes_internes:       buildNotesInternes(row, mapping),
+    notes_internes:       buildNotesInternes(row, mapping, exclureNom1, exclureNom2),
     contact_nom:          cell(row, mapping.contact_nom),
     contact_fonction:     cell(row, mapping.contact_fonction),
     contact_telephone:    cell(row, mapping.contact_telephone),

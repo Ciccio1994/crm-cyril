@@ -91,6 +91,91 @@ describe('parseLigne — structure Schenk full', () => {
   })
 })
 
+describe('parseLigne — heuristique "adresse déguisée en enseigne"', () => {
+  const mapping = detecterMapping(HEADERS_SCHENK)
+
+  it('cas signalé : ACP Sàrl / Maison Cocotte / Chemin de Rossaix 12', () => {
+    // Col Adresse contient une vraie adresse ; Nom 2 contient le vrai nom.
+    const row = [
+      'C99999', 'ACP Sàrl', '', 'Maison Cocotte',
+      'Chemin de Rossaix 12', '1955 Chamoson', 'Chamoson', '1955',
+      '027 000 00 00', '', '', 'HORECA',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe('Maison Cocotte')
+    expect(p.adresse_ligne_1).toBe('Chemin de Rossaix 12')
+    // notes_internes ne doit pas contenir "Maison Cocotte" (déjà remonté en enseigne)
+    expect(p.notes_internes).toBe('Nom raison sociale: ACP Sàrl')
+  })
+
+  it('Nom 2 vide → fallback sur Nom (col 3) comme enseigne', () => {
+    const row = [
+      'C1', 'Hôtel de la Poste', '', '',
+      'Rue du Bourg 22', 'Bourg-en-Verbier', 'Verbier', '1936',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe('Hôtel de la Poste')
+    expect(p.adresse_ligne_1).toBe('Rue du Bourg 22')
+    // notes_internes vide : Nom a été remonté en enseigne
+    expect(p.notes_internes).toBeNull()
+  })
+
+  it('Chalet Blanc en col Adresse + Cave X en Nom → enseigne = Cave X', () => {
+    const row = [
+      'C2', 'Cave X', '', '',
+      'Chalet Blanc 5', 'Route du Vin', 'Fully', '1926',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe('Cave X')
+    expect(p.adresse_ligne_1).toBe('Chalet Blanc 5')
+  })
+
+  it('col Adresse commence par un vrai nom (ex "Le Chemineau") → PAS de swap', () => {
+    // "Le Chemineau" ne commence pas par "chemin" (le mot est "le")
+    const row = [
+      'C3', 'Bar Y', '', 'Nom 2 ignoré',
+      'Le Chemineau', 'Rue X 12', 'Sion', '1950',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe('Le Chemineau')
+    expect(p.adresse_ligne_1).toBe('Rue X 12')
+  })
+
+  it('accents dans le mot-clé ("Bâtiment") détectés', () => {
+    const row = [
+      'C4', 'Société Z', '', 'Restaurant Réel',
+      'Bâtiment A, 3ème étage', 'Rue X', 'Sion', '1950',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe('Restaurant Réel')
+    expect(p.adresse_ligne_1).toBe('Bâtiment A, 3ème étage')
+  })
+
+  it('col Adresse commence par mot-clé MAIS Nom 2 et Nom vides → conserve la valeur (pas de swap possible)', () => {
+    const row = [
+      'C5', '', '', '',
+      'Chemin de Palézieux 5', 'Sion Sud', 'Sion', '1950',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    // Fallback : conserve la valeur d'origine dans enseigne (sinon on perdrait la ligne)
+    expect(p.enseigne).toBe('Chemin de Palézieux 5')
+  })
+
+  it('heuristique inactive en format simple (pas de notes_nom)', () => {
+    const mSimple = detecterMapping(['Enseigne', 'Adresse', 'CP', 'Ville'])
+    const row = ['Cave Chemin', 'Rue X 5', '1950', 'Sion']
+    // Enseigne provient de col 0 en format simple, pas de swap possible ni nécessaire
+    const p = parseLigne(row, mSimple)!
+    expect(p.enseigne).toBe('Cave Chemin')
+    expect(p.adresse_ligne_1).toBe('Rue X 5')
+  })
+})
+
 describe('parseLigne — format simple', () => {
   const mapping = detecterMapping(['Enseigne', 'Adresse', 'CP', 'Ville', 'Tél', 'Email'])
 
