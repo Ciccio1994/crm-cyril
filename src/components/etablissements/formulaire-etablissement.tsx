@@ -22,7 +22,9 @@ import {
 import { executerAvecSync, executerAvecSyncCible } from '@/lib/sync/wrapper'
 import { notifierChangement } from '@/lib/sync/revalidation'
 import { ChampAdresseAutocomplete } from './champ-adresse-autocomplete'
+import { FormulaireHoraires } from './formulaire-horaires'
 import type { DetailsLieu } from '@/lib/geocode'
+import type { Horaires } from '@/types/horaires'
 import type {
   Etablissement,
   StatutCommercial,
@@ -87,6 +89,7 @@ type FormState = {
   notes_internes: string
   latitude: number | null
   longitude: number | null
+  horaires_ouverture: Horaires | null
 }
 
 function initFromEtab(e?: Etablissement): FormState {
@@ -107,6 +110,7 @@ function initFromEtab(e?: Etablissement): FormState {
     notes_internes:        e?.notes_internes ?? '',
     latitude:              e?.latitude ?? null,
     longitude:             e?.longitude ?? null,
+    horaires_ouverture:    e?.horaires_ouverture ?? null,
   }
 }
 
@@ -129,6 +133,7 @@ function payloadFromState(s: FormState) {
     notes_internes: clean(s.notes_internes),
     latitude: s.latitude,
     longitude: s.longitude,
+    horaires_ouverture: s.horaires_ouverture,
   }
 }
 
@@ -413,6 +418,18 @@ export function FormulaireEtablissement({
             />
           </div>
         </section>
+
+        <details className="rounded-md border">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Horaires d&apos;ouverture
+          </summary>
+          <div className="p-3">
+            <FormulaireHoraires
+              value={state.horaires_ouverture}
+              onChange={(v) => set('horaires_ouverture', v)}
+            />
+          </div>
+        </details>
 
         {erreur && (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">

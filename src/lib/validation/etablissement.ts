@@ -36,6 +36,13 @@ export const EtablissementCreateSchema = z.object({
   seuil_inactivite_mois: z.number().int().min(1).max(60).default(12),
   latitude:              z.number().min(-90).max(90).nullable().optional(),
   longitude:             z.number().min(-180).max(180).nullable().optional(),
+  horaires_ouverture:    z.record(
+    z.string(),
+    z.union([
+      z.array(z.object({ debut: z.string(), fin: z.string() })),
+      z.null(),
+    ]),
+  ).nullable().optional(),
 })
 
 export const EtablissementUpdateSchema = EtablissementCreateSchema.partial()
