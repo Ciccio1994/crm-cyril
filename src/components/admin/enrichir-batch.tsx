@@ -61,14 +61,27 @@ export function EnrichirBatch({ candidatsInitiaux }: { candidatsInitiaux: Candid
         if (r.erreur) {
           majEntry(c.id, { statut: 'erreur', erreur: r.erreur })
         } else if (r.data) {
-          if (r.data.enseigne_ecrasee || r.data.horaires_ecrites) {
+          // En batch, on n'accepte QUE les résultats haute confiance (auto).
+          // Les cas ambigus (choix multiples) restent à valider manuellement
+          // via le bouton sur la fiche pour ne pas écraser à l'aveugle.
+          if (r.data.type === 'auto') {
+            const res = r.data.resultat
+            if (res.enseigne_ecrasee || res.horaires_ecrites) {
+              majEntry(c.id, {
+                statut: 'trouve',
+                nouveau_nom: res.nouveau_nom,
+                horaires_ecrites: res.horaires_ecrites,
+              })
+            } else {
+              majEntry(c.id, { statut: 'non_trouve', nouveau_nom: res.nouveau_nom })
+            }
+          } else if (r.data.type === 'choix') {
             majEntry(c.id, {
-              statut: 'trouve',
-              nouveau_nom: r.data.nouveau_nom,
-              horaires_ecrites: r.data.horaires_ecrites,
+              statut: 'non_trouve',
+              erreur: `${r.data.candidats.length} candidats — vérifier manuellement sur la fiche`,
             })
           } else {
-            majEntry(c.id, { statut: 'non_trouve', nouveau_nom: r.data.nouveau_nom })
+            majEntry(c.id, { statut: 'non_trouve', erreur: r.data.message })
           }
         }
       } catch (e) {
