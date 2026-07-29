@@ -36,7 +36,7 @@ export function ListeEnDanger({ etabs }: { etabs: Etablissement[] }) {
             <Card className="p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{etab.enseigne}</p>
+                  <p className="break-words text-sm font-medium">{etab.enseigne}</p>
                   <p className="text-xs text-muted-foreground">
                     {etab.tournee?.nom ?? 'Sans tournée'}
                     {etab.derniere_visite_at &&

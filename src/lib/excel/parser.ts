@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import { detecterMapping, type Mapping } from './mapping'
 import { mapperGroupePrix, mapperStatut } from './normaliser'
 import { parseJourExcel } from '@/lib/horaires/regles'
+import { estNomPersonne, contientRaisonSociale } from '@/lib/etablissements/nom-personne'
 import type { Horaires, JourSemaine } from '@/types/horaires'
 import type { StatutCommercial, GroupePrix } from '@/types/database'
 
@@ -78,6 +79,29 @@ export function estAdresseDeguisee(valeur: string | null): boolean {
   return MOTS_CLES_ADRESSE.some((m) => n.startsWith(m))
 }
 
+// Scan des cellules du row pour trouver une chaîne contenant une raison sociale
+// (Sàrl/SA/SNC/GmbH...). Exclut les colonnes déjà mappées à des champs connus
+// (adresse, ville, tel, email, code, groupe_prix, jours) pour éviter de matcher
+// dans des données non-nom (ex "SA" dans un numéro de rue improbable).
+function trouverRaisonSocialeDansRow(row: unknown[], mapping: Mapping): string | null {
+  const idxExclus = new Set<number>()
+  for (const k of ['adresse_ligne_1', 'code_postal', 'ville', 'telephone_principal',
+                    'telephone_mobile', 'email', 'code_schenk', 'groupe_prix', 'statut',
+                    'contact_nom', 'contact_fonction', 'contact_telephone', 'contact_email'] as const) {
+    const v = mapping[k]
+    if (typeof v === 'number') idxExclus.add(v)
+  }
+  if (mapping.jours) {
+    for (const idx of Object.values(mapping.jours)) if (typeof idx === 'number') idxExclus.add(idx)
+  }
+  for (let i = 0; i < row.length; i++) {
+    if (idxExclus.has(i)) continue
+    const val = cell(row, i)
+    if (val && contientRaisonSociale(val) && !estAdresseDeguisee(val)) return val
+  }
+  return null
+}
+
 // Règle téléphones :
 // - N° téléphone rempli, N° portable rempli    → principal = tel, mobile = portable
 // - N° téléphone rempli, N° portable vide      → principal = tel, mobile = null
@@ -122,13 +146,32 @@ export function parseLigne(
   if (enModeSchenkFull && estAdresseDeguisee(enseigne)) {
     const nom2 = cell(row, mapping.notes_nom_2)
     const nom1 = cell(row, mapping.notes_nom_1)
-    const nouveauNom = nom2 ?? nom1
+
+    // Ordre de priorité pour le fallback enseigne (mieux à pire) :
+    // 1. Nom 2 non-personne (préféré comme "nom commercial" en Schenk full)
+    // 2. Nom 1 non-personne
+    // 3. Scan de TOUT le row pour une cellule contenant une raison sociale
+    // 4. Nom 2 même si personne (mieux que garder l'adresse en enseigne)
+    // 5. Nom 1 même si personne (déclenchera le badge "vérifier" en UI)
+    // 6. Sinon, on garde la valeur d'origine (col Adresse) — dernier recours
+    let nouveauNom: string | null = null
+    let source: 'nom2' | 'nom1' | 'scan' | null = null
+
+    if (nom2 && !estNomPersonne(nom2)) { nouveauNom = nom2; source = 'nom2' }
+    else if (nom1 && !estNomPersonne(nom1)) { nouveauNom = nom1; source = 'nom1' }
+    else {
+      const scan = trouverRaisonSocialeDansRow(row, mapping)
+      if (scan) { nouveauNom = scan; source = 'scan' }
+      else if (nom2) { nouveauNom = nom2; source = 'nom2' }
+      else if (nom1) { nouveauNom = nom1; source = 'nom1' }
+    }
+
     if (nouveauNom) {
       adresse_ligne_1 = enseigne
       enseigne = nouveauNom
       // Éviter de dupliquer dans notes_internes la valeur remontée en enseigne.
-      if (nom2 !== null) exclureNom2 = true
-      else if (nom1 !== null) exclureNom1 = true
+      if (source === 'nom2') exclureNom2 = true
+      else if (source === 'nom1') exclureNom1 = true
     }
   }
 

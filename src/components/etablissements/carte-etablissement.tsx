@@ -33,16 +33,16 @@ export function CarteEtablissement({ etablissement, retard }: CarteEtablissement
       <Card className="gap-2 rounded-none border-x-0 border-t-0 px-4 py-3 shadow-none">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold leading-tight">
+            <h2 className="break-words text-sm font-semibold leading-tight">
               {etablissement.enseigne}
             </h2>
             {etablissement.code_schenk && (
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
+              <p className="mt-0.5 text-[11px] text-muted-foreground/80">
                 N° {etablissement.code_schenk}
               </p>
             )}
             {villeLigne && (
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+              <p className="mt-0.5 text-sm text-muted-foreground">
                 {villeLigne}
               </p>
             )}

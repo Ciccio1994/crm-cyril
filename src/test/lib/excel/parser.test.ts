@@ -176,6 +176,77 @@ describe('parseLigne — heuristique "adresse déguisée en enseigne"', () => {
   })
 })
 
+describe('parseLigne — fallback "nom personne physique" (FIX terrain 2026-07)', () => {
+  const mapping = detecterMapping(HEADERS_SCHENK)
+
+  it('cas signalé : Nom = "M. Alberto Santos" (personne), Nom 2 vide → enseigne = "M. Alberto Santos" (dernier fallback + badge en UI)', () => {
+    const row = [
+      'C0025641', 'M. Alberto Santos', '', '',
+      'Rte cantonale 186', '1963 Vétroz', 'Vétroz', '1963',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    // Faute de raison sociale ailleurs, on garde le nom personne comme enseigne
+    // (mieux que garder l'adresse). Le badge "vérifier" s'affichera sur la fiche.
+    expect(p.enseigne).toBe('M. Alberto Santos')
+    expect(p.adresse_ligne_1).toBe('Rte cantonale 186')
+  })
+
+  it('Nom = "Cambuse d\'Alberto Sàrl" (raison sociale) → enseigne = raison sociale', () => {
+    const row = [
+      'C1', "Cambuse d'Alberto Sàrl", '', '',
+      'Rte X 5', 'Vétroz', 'Vétroz', '1963',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe("Cambuse d'Alberto Sàrl")
+    expect(p.adresse_ligne_1).toBe('Rte X 5')
+  })
+
+  it('Nom = "Jean-Marc Fellay" (personne), Nom 2 = "Le Dahu" → enseigne = "Le Dahu"', () => {
+    const row = [
+      'C2', 'Jean-Marc Fellay', '', 'Le Dahu',
+      'Route XY', 'Verbier', 'Verbier', '1936',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe('Le Dahu')
+    expect(p.adresse_ligne_1).toBe('Route XY')
+  })
+
+  it('EXCEPTION mot-clé commercial : Nom = "Cave Fellay" → enseigne = "Cave Fellay" (pas nom personne)', () => {
+    const row = [
+      'C3', 'Cave Fellay', '', '',
+      'Route XY', 'Fully', 'Fully', '1926',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe('Cave Fellay')
+    expect(p.adresse_ligne_1).toBe('Route XY')
+  })
+
+  it('Nom = personne, Nom 2 = personne aussi → utilise Nom 2 quand même (mieux que garder adresse)', () => {
+    const row = [
+      'C4', 'M. Alberto Santos', '', 'Paula Santos',
+      'Rte X', 'Sion', 'Sion', '1950',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    // Priorité Nom 2 en dernier recours (même si aussi personne)
+    expect(p.enseigne).toBe('Paula Santos')
+  })
+
+  it('Priorité raison sociale : Nom = personne, Nom 2 = "Cambuse Sàrl" → enseigne = Nom 2', () => {
+    const row = [
+      'C5', 'M. Alberto Santos', '', 'Cambuse d\'Alberto Sàrl',
+      'Rte X', 'Sion', 'Sion', '1950',
+      '', '', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.enseigne).toBe("Cambuse d'Alberto Sàrl")
+  })
+})
+
 describe('parseLigne — format simple', () => {
   const mapping = detecterMapping(['Enseigne', 'Adresse', 'CP', 'Ville', 'Tél', 'Email'])
 

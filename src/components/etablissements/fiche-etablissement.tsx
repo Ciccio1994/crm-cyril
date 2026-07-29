@@ -19,6 +19,7 @@ import { ActionsRapides } from './actions-rapides'
 import { CarteOffre } from '@/components/offres/carte-offre'
 import { SectionHoraires } from './section-horaires'
 import { BoutonChatFiche } from './bouton-chat-fiche'
+import { estNomPersonne } from '@/lib/etablissements/nom-personne'
 import type {
   Contact,
   Etablissement,
@@ -89,7 +90,7 @@ export function FicheEtablissement({
             ‹
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-semibold leading-tight">
+            <h1 className="break-words text-base font-semibold leading-tight sm:text-lg">
               {etablissement.enseigne}
             </h1>
             {etablissement.code_schenk && (
@@ -105,6 +106,11 @@ export function FicheEtablissement({
                 jours={retard.jours_depuis_visite}
                 enRetard={retard.est_en_retard}
               />
+              {estNomPersonne(etablissement.enseigne) && (
+                <Badge className="bg-amber-500 hover:bg-amber-500" title="L'enseigne actuelle ressemble à un nom de personne. Vérifie via Google Maps et corrige si besoin.">
+                  ⚠️ Nom personne
+                </Badge>
+              )}
             </div>
           </div>
           <Link

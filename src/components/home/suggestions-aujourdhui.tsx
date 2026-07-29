@@ -43,7 +43,7 @@ function Bloc({ titre, items }: { titre: string; items: Etablissement[] }) {
                 <Link href={`/etablissements/${e.id}`} className="block">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{e.enseigne}</p>
+                      <p className="break-words text-sm font-medium">{e.enseigne}</p>
                       <p className="text-xs text-muted-foreground">
                         {e.tournee?.nom ?? 'Sans tournée'}
                       </p>
