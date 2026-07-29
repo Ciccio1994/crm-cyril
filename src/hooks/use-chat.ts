@@ -203,7 +203,11 @@ export function useChat(conversationId: string, etablissementId?: string) {
    * Hydrate le hook avec l'historique existant (depuis la BDD).
    */
   const chargerHistorique = useCallback((echanges: EchangeChat[]) => {
-    setEtat((s) => ({ ...s, echanges }))
+    setEtat((s) => {
+      // Ne remplace pas si l'utilisateur a déjà commencé à interagir
+      if (s.echanges.length > 0) return s
+      return { ...s, echanges }
+    })
   }, [])
 
   return { etat, envoyerMessage, confirmerActions, chargerHistorique }

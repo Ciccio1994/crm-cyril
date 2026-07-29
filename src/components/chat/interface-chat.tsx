@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type Anthropic from '@anthropic-ai/sdk'
 import { useChat } from '@/hooks/use-chat'
 import { lireConversation } from '@/actions/chat'
@@ -34,6 +34,11 @@ export function InterfaceChat({ conversationId, etablissementId, modeleInitial }
     conversationId,
     etablissementId,
   )
+  const finRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    finRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [etat.echanges, etat.actionsEnAttente.length])
 
   useEffect(() => {
     void lireConversation(conversationId).then((r) => {
@@ -90,6 +95,7 @@ export function InterfaceChat({ conversationId, etablissementId, modeleInitial }
             ❌ {etat.erreur}
           </div>
         )}
+        <div ref={finRef} />
       </div>
       <Composer
         onEnvoyer={envoyerMessage}

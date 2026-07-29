@@ -18,6 +18,13 @@ export default async function PageChat({
     if (r.data) {
       redirect(`/chat?c=${r.data.id}${params.etab ? `&etab=${params.etab}` : ''}`)
     }
+    // Si on arrive ici, creerConversation a échoué
+    return (
+      <div className="p-6">
+        <h1 className="text-lg font-semibold">Impossible de créer une conversation</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{r.erreur ?? 'Erreur inconnue'}</p>
+      </div>
+    )
   }
 
   const conversations = await lireConversations()
