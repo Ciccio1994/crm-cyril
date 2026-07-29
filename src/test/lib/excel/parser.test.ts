@@ -247,6 +247,65 @@ describe('parseLigne — fallback "nom personne physique" (FIX terrain 2026-07)'
   })
 })
 
+describe('parseLigne — swap fixe/mobile (FIX terrain 2026-07 Cedric Taramarcaz)', () => {
+  const mapping = detecterMapping(HEADERS_SCHENK)
+
+  it('cas signalé : col 9 = mobile 076..., col 10 = fixe 027... → INVERSE (fixe en principal)', () => {
+    const row = [
+      'C0036589', 'Cedric Taramarcaz', '', 'Café Le Central',
+      "Rue de l'Église 51", '1926 Fully', 'Fully', '1926',
+      '+41 76 452 71 70', '+41 27 746 34 83', '', 'HORECA',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.telephone_principal).toBe('+41 27 746 34 83')  // fixe → principal
+    expect(p.telephone_mobile).toBe('+41 76 452 71 70')     // mobile → secondaire
+  })
+
+  it('ordre normal : col 9 = fixe, col 10 = mobile → ordre conservé', () => {
+    const row = [
+      'C1', 'X', '', 'Restaurant Y',
+      'Rue X', 'Ville', 'Ville', '1950',
+      '027 771 12 34', '079 555 44 33', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.telephone_principal).toBe('027 771 12 34')
+    expect(p.telephone_mobile).toBe('079 555 44 33')
+  })
+
+  it('deux fixes : ordre Excel conservé', () => {
+    const row = [
+      'C2', 'X', '', 'Restaurant Y',
+      'Rue X', 'Ville', 'Ville', '1950',
+      '027 111 11 11', '027 222 22 22', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.telephone_principal).toBe('027 111 11 11')
+    expect(p.telephone_mobile).toBe('027 222 22 22')
+  })
+
+  it('deux mobiles : ordre Excel conservé', () => {
+    const row = [
+      'C3', 'X', '', 'Restaurant Y',
+      'Rue X', 'Ville', 'Ville', '1950',
+      '079 111 11 11', '076 222 22 22', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.telephone_principal).toBe('079 111 11 11')
+    expect(p.telephone_mobile).toBe('076 222 22 22')
+  })
+
+  it('un seul renseigné (fixe en col 10) : passe en principal', () => {
+    const row = [
+      'C4', 'X', '', 'Restaurant Y',
+      'Rue X', 'Ville', 'Ville', '1950',
+      '', '027 234 12 34', '', '',
+    ]
+    const p = parseLigne(row, mapping)!
+    expect(p.telephone_principal).toBe('027 234 12 34')
+    expect(p.telephone_mobile).toBeNull()
+  })
+})
+
 describe('parseLigne — format simple', () => {
   const mapping = detecterMapping(['Enseigne', 'Adresse', 'CP', 'Ville', 'Tél', 'Email'])
 

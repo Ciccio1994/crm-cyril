@@ -31,3 +31,50 @@ export function telephonesEquivalents(a: string | null | undefined, b: string | 
   const nbSansCode = nbSansZero.replace(/^41/, '')
   return naSansCode === nbSansCode && naSansCode.length >= 7
 }
+
+// Codes régionaux fixes CH (indicatifs à 2 chiffres après le 0 initial ou +41)
+// Source : OFCOM — plan de numérotation E.164 CH.
+const CODES_FIXES_CH = new Set([
+  '21', '22', '24', '26', '27',     // Vaud/Genève/Jura/Neuchâtel/Valais
+  '31', '32', '33', '34',           // Bern/région
+  '41', '43', '44',                 // Zug/Zürich
+  '51', '52', '55', '56', '58',     // St. Gallen/Winterthur/etc.
+  '61', '62',                       // Basel/Aargau
+  '71', '81', '91',                 // Ostschweiz/Graubünden/Ticino
+])
+
+// Codes mobiles CH (préfixes portables + Chargeur/data)
+const CODES_MOBILES_CH = new Set(['74', '75', '76', '77', '78', '79'])
+
+// Extrait le code régional (2 chiffres) d'un numéro suisse normalisé.
+// Gère "+41 27 ...", "027 ...", "27 ...", etc.
+function extraireCodeRegional(v: string | null | undefined): string {
+  const n = normaliserTelephone(v)
+  if (!n) return ''
+  // Retire l'indicatif international "41" en tête
+  const sansIntl = n.startsWith('41') ? n.slice(2) : n
+  // Retire le "0" national initial
+  const sansZero = sansIntl.startsWith('0') ? sansIntl.slice(1) : sansIntl
+  return sansZero.slice(0, 2)
+}
+
+// True si le numéro ressemble à un fixe suisse (021-091 selon les régions).
+export function estFixeSuisse(v: string | null | undefined): boolean {
+  const code = extraireCodeRegional(v)
+  return CODES_FIXES_CH.has(code)
+}
+
+// True si le numéro ressemble à un mobile suisse (074-079).
+export function estMobileSuisse(v: string | null | undefined): boolean {
+  const code = extraireCodeRegional(v)
+  return CODES_MOBILES_CH.has(code)
+}
+
+// Normalise une chaîne pour envoi à Google Places Text Search :
+// - Retire les accents (NFD + strip diacritics) pour éviter les mismatches
+//   fréquents entre BDD ("Rue de l'Église") et Google ("Rue de l'Eglise")
+// - Conserve la casse (Google est case-insensitive)
+export function normaliserPourGoogle(v: string | null | undefined): string {
+  if (!v) return ''
+  return v.normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+}

@@ -3,6 +3,7 @@ import { detecterMapping, type Mapping } from './mapping'
 import { mapperGroupePrix, mapperStatut } from './normaliser'
 import { parseJourExcel } from '@/lib/horaires/regles'
 import { estNomPersonne, contientRaisonSociale } from '@/lib/etablissements/nom-personne'
+import { estFixeSuisse, estMobileSuisse } from '@/lib/etablissements/telephone'
 import type { Horaires, JourSemaine } from '@/types/horaires'
 import type { StatutCommercial, GroupePrix } from '@/types/database'
 
@@ -102,24 +103,35 @@ function trouverRaisonSocialeDansRow(row: unknown[], mapping: Mapping): string |
   return null
 }
 
-// Règle téléphones :
-// - N° téléphone rempli, N° portable rempli    → principal = tel, mobile = portable
-// - N° téléphone rempli, N° portable vide      → principal = tel, mobile = null
-// - N° téléphone vide, N° portable rempli      → principal = portable (fallback), mobile = null
-// - Les deux vides                             → null / null
+// Règle téléphones : le fixe est plus discriminant pour Google Places et pour
+// contacter l'établissement (le mobile suit le propriétaire ailleurs). Priorise
+// le fixe en telephone_principal quel que soit l'ordre Excel.
+//
+// - Un seul renseigné → principal, mobile null
+// - Deux renseignés, l'un fixe l'autre mobile → fixe en principal, mobile en secondaire
+// - Deux fixes / deux mobiles / types inconnus → conserve l'ordre Excel (col 9 = principal)
+// - Les deux vides → null / null
 function extraireTelephones(
   row: unknown[],
   mapping: Mapping,
 ): { telephone_principal: string | null; telephone_mobile: string | null } {
-  const tel = cell(row, mapping.telephone_principal)
-  const portable = cell(row, mapping.telephone_mobile)
-  if (tel) {
-    return { telephone_principal: tel, telephone_mobile: portable }
-  }
-  if (portable) {
-    return { telephone_principal: portable, telephone_mobile: null }
-  }
-  return { telephone_principal: null, telephone_mobile: null }
+  const telA = cell(row, mapping.telephone_principal)  // col N° téléphone Excel
+  const telB = cell(row, mapping.telephone_mobile)     // col N° portable Excel
+
+  if (!telA && !telB) return { telephone_principal: null, telephone_mobile: null }
+  if (telA && !telB) return { telephone_principal: telA, telephone_mobile: null }
+  if (!telA && telB) return { telephone_principal: telB, telephone_mobile: null }
+
+  // Les deux renseignés : détecter types pour privilégier le fixe
+  const aFixe = estFixeSuisse(telA)
+  const aMobile = estMobileSuisse(telA)
+  const bFixe = estFixeSuisse(telB)
+  const bMobile = estMobileSuisse(telB)
+
+  // A mobile ET B fixe → INVERSER : le fixe passe en principal
+  if (aMobile && bFixe) return { telephone_principal: telB, telephone_mobile: telA }
+  // Sinon (A fixe et B mobile, ou 2 fixes, ou 2 mobiles, ou 1 inconnu) : ordre Excel
+  return { telephone_principal: telA, telephone_mobile: telB }
 }
 
 export function parseLigne(

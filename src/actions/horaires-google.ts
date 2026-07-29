@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { parseGooglePeriods, type GooglePeriod } from '@/lib/horaires/google-parser'
 import { estNomPersonne } from '@/lib/etablissements/nom-personne'
 import { extraireNomCommercial, motsCommuns } from '@/lib/etablissements/nom-commercial'
-import { telephonesEquivalents } from '@/lib/etablissements/telephone'
+import { telephonesEquivalents, estFixeSuisse, normaliserPourGoogle } from '@/lib/etablissements/telephone'
 import type { Horaires } from '@/types/horaires'
 
 const SEARCH_TEXT_URL = 'https://places.googleapis.com/v1/places:searchText'
@@ -167,6 +167,7 @@ interface EtatFiche {
   code_postal: string | null
   ville: string | null
   telephone_principal: string | null
+  telephone_mobile: string | null
   horaires_ouverture: Horaires | null
   notes_internes: string | null
 }
@@ -184,7 +185,11 @@ interface EvaluationCandidat {
 //   OU adresse Google contient le code_postal BDD
 // - Faible : aucun des critères ci-dessus
 function evaluerCandidat(place: GooglePlace, etat: EtatFiche, nomCommercialNotes: string | null, strategie: string): EvaluationCandidat {
-  const telMatch = telephonesEquivalents(place.nationalPhoneNumber, etat.telephone_principal)
+  // Compare contre principal ET mobile (car dans les fiches importées avant le fix,
+  // le fixe peut être stocké en telephone_mobile)
+  const telMatch =
+    telephonesEquivalents(place.nationalPhoneNumber, etat.telephone_principal) ||
+    telephonesEquivalents(place.nationalPhoneNumber, etat.telephone_mobile)
   const nomGoogle = place.displayName?.text ?? ''
   const nomsCommuns = nomCommercialNotes ? motsCommuns(nomCommercialNotes, nomGoogle) : 0
   const cpMatch = etat.code_postal ? (place.formattedAddress ?? '').includes(etat.code_postal) : false
@@ -214,32 +219,54 @@ interface Strategie {
   requete: string
 }
 
+// Sélectionne le meilleur téléphone pour requête Google : préfère le fixe
+// (ancré à l'établissement), fallback sur mobile ou principal si pas de fixe détecté.
+function meilleurTelephonePourGoogle(etat: EtatFiche): string | null {
+  if (estFixeSuisse(etat.telephone_principal)) return etat.telephone_principal
+  if (estFixeSuisse(etat.telephone_mobile)) return etat.telephone_mobile
+  return etat.telephone_principal ?? etat.telephone_mobile ?? null
+}
+
+// Assemble un textQuery en normalisant les accents (Google Places matche mieux
+// sans accents — ex "Rue de l'Église 51" vs "Rue de l'Eglise 51").
+function construireRequete(...parts: (string | null | undefined)[]): string {
+  return parts
+    .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+    .map((p) => normaliserPourGoogle(p))
+    .join(' ')
+}
+
 // Construit la liste ordonnée des stratégies de recherche selon les données dispo.
 function construireStrategies(etat: EtatFiche, nomCommercialNotes: string | null): Strategie[] {
   const s: Strategie[] = []
+  const telFixe = meilleurTelephonePourGoogle(etat)
+
+  // Stratégie A : nom commercial extrait des notes + ville + fixe
+  // (le plus précis quand notes_internes contient une raison sociale)
   if (nomCommercialNotes && etat.ville) {
     s.push({
-      nom: 'notes+adresse+ville',
-      requete: [nomCommercialNotes, etat.adresse_ligne_1, etat.ville].filter(Boolean).join(' '),
+      nom: 'notes+ville+fixe',
+      requete: construireRequete(nomCommercialNotes, etat.ville, telFixe),
     })
   }
-  if (etat.telephone_principal && etat.ville) {
+  // Stratégie B : téléphone fixe + ville (le fixe est très discriminant)
+  if (telFixe && etat.ville) {
     s.push({
-      nom: 'tel+ville',
-      requete: [etat.telephone_principal, etat.ville].filter(Boolean).join(' '),
+      nom: 'fixe+ville',
+      requete: construireRequete(telFixe, etat.ville),
     })
   }
+  // Stratégie C : adresse complète normalisée
   if (etat.adresse_ligne_1 && etat.ville) {
     s.push({
       nom: 'adresse+cp+ville',
-      requete: [etat.adresse_ligne_1, etat.code_postal, etat.ville].filter(Boolean).join(' '),
+      requete: construireRequete(etat.adresse_ligne_1, etat.code_postal, etat.ville),
     })
   }
-  // Fallback : l'enseigne actuelle + tout ce qu'on a
-  const fallbackParts = [etat.enseigne, etat.adresse_ligne_1, etat.code_postal, etat.ville, etat.telephone_principal]
-    .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
-  if (fallbackParts.length > 0) {
-    s.push({ nom: 'enseigne+tout', requete: fallbackParts.join(' ') })
+  // Fallback : enseigne actuelle + tout ce qu'on a
+  const fallback = construireRequete(etat.enseigne, etat.adresse_ligne_1, etat.code_postal, etat.ville, telFixe)
+  if (fallback.length > 0) {
+    s.push({ nom: 'enseigne+tout', requete: fallback })
   }
   // Dédup par requête pour éviter d'appeler Google deux fois avec la même chose
   const vues = new Set<string>()
@@ -299,7 +326,7 @@ export async function recupererNomEtHorairesDepuisGoogle(
   const supabase = await createClient()
   const { data: etab, error: errE } = await supabase
     .from('etablissement')
-    .select('enseigne, adresse_ligne_1, code_postal, ville, telephone_principal, horaires_ouverture, notes_internes')
+    .select('enseigne, adresse_ligne_1, code_postal, ville, telephone_principal, telephone_mobile, horaires_ouverture, notes_internes')
     .eq('id', etablissementId)
     .is('deleted_at', null)
     .single()
@@ -357,7 +384,7 @@ export async function appliquerChoixGoogle(
   const supabase = await createClient()
   const { data: etab, error: errE } = await supabase
     .from('etablissement')
-    .select('enseigne, adresse_ligne_1, code_postal, ville, telephone_principal, horaires_ouverture, notes_internes')
+    .select('enseigne, adresse_ligne_1, code_postal, ville, telephone_principal, telephone_mobile, horaires_ouverture, notes_internes')
     .eq('id', etablissementId)
     .is('deleted_at', null)
     .single()
