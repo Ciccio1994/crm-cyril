@@ -13,12 +13,17 @@ export async function creerConversation(
   etablissementId: string | null,
 ): Promise<ActionResult<Conversation>> {
   const supabase = await createClient()
+  const payload = { modele, etablissement_id: etablissementId, messages: [] as Anthropic.MessageParam[] }
   const { data, error } = await supabase
     .from('conversation')
-    .insert({ modele, etablissement_id: etablissementId, messages: [] })
+    .insert(payload)
     .select()
     .single()
-  if (error || !data) return { erreur: error?.message ?? 'Erreur' }
+  if (error) {
+    console.error('[creerConversation] Erreur Supabase :', JSON.stringify(error))
+    return { erreur: `${error.code ?? 'ERR'} — ${error.message} (details: ${error.details ?? 'aucun'})` }
+  }
+  if (!data) return { erreur: 'Aucune donnée retournée' }
   return { data: data as Conversation }
 }
 

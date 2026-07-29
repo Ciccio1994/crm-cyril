@@ -33,6 +33,20 @@ export function construireSystemePrompt(contexte?: ContexteFiche): string {
     `Date/heure actuelle : ${formaterDate(new Date().toISOString())}.`,
   ]
 
+  if (!contexte) {
+    parts.push(
+      '',
+      '### Mode chat général',
+      "Tu es en mode général (pas de contexte fiche pré-injecté). Cyril peut :",
+      "- Te demander de chercher un ou plusieurs clients (par enseigne, ville, code, contact, tel) via `chercherEtablissements`",
+      "- Te demander des infos sur un client (dernières visites, offres, contacts) — utilise d'abord `chercherEtablissements` pour trouver l'ID, puis `lireVisites`",
+      "- Te demander de créer un rappel général (sans lien à un client) via `creerRappel` avec `etablissement_id` null",
+      "- Répondre à des questions analytiques simples (« combien de clients HORECA à Verbier ? ») en utilisant `chercherEtablissements` puis en comptant",
+      '- Discuter librement (aide à formuler un message, conseil commercial, brainstorm).',
+      "N'hésite jamais à utiliser tes outils de lecture — ils sont sans risque et n'affectent rien.",
+    )
+  }
+
   if (contexte) {
     const { etablissement: e, contacts, dernieres_visites: visites, offres_actives, horaires } = contexte
     parts.push('', `### Contexte fiche : ${e.enseigne}`)

@@ -107,7 +107,6 @@ export function FicheEtablissement({
               />
             </div>
           </div>
-          <BoutonChatFiche etablissementId={etablissement.id} />
           <Link
             href={`/etablissements/${etablissement.id}/modifier`}
             className={cn(
@@ -121,6 +120,10 @@ export function FicheEtablissement({
       </header>
 
       <ActionsRapides etab={etablissement} />
+
+      <div className="px-4 pt-3">
+        <BoutonChatFiche etablissementId={etablissement.id} />
+      </div>
 
       <Tabs defaultValue="info" className="px-4 pt-4">
         <TabsList className="w-full">

@@ -8,7 +8,7 @@ export function BoutonChatFiche({ etablissementId }: { etablissementId: string }
   return (
     <Link
       href={`/chat?new=1&etab=${etablissementId}`}
-      className={cn(buttonVariants({ variant: 'outline' }), 'h-9 gap-1 px-3 text-sm')}
+      className={cn(buttonVariants({ variant: 'outline' }), 'h-12 w-full gap-1 text-base')}
     >
       💬 Demander à Claude
     </Link>
