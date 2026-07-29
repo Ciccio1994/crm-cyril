@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx'
 import { detecterMapping, type Mapping } from './mapping'
 import { mapperGroupePrix, mapperStatut } from './normaliser'
+import { parseJourExcel } from '@/lib/horaires/regles'
+import type { Horaires, JourSemaine } from '@/types/horaires'
 import type { StatutCommercial, GroupePrix } from '@/types/database'
 
 export interface PayloadImport {
@@ -19,6 +21,7 @@ export interface PayloadImport {
   contact_fonction: string | null
   contact_telephone: string | null
   contact_email: string | null
+  horaires_ouverture: Horaires | null
 }
 
 export interface LigneImport {
@@ -81,6 +84,18 @@ export function parseLigne(
 
   const { telephone_principal, telephone_mobile } = extraireTelephones(row, mapping)
 
+  // Horaires : parse chaque colonne jour reconnue
+  let horaires_ouverture: Horaires | null = null
+  if (mapping.jours) {
+    const h: Horaires = {}
+    for (const [jour, idx] of Object.entries(mapping.jours) as [JourSemaine, number][]) {
+      const val = cell(row, idx)
+      const parsed = parseJourExcel(val)
+      if (parsed !== undefined) h[jour] = parsed
+    }
+    if (Object.keys(h).length > 0) horaires_ouverture = h
+  }
+
   return {
     enseigne,
     code_schenk:          cell(row, mapping.code_schenk),
@@ -97,6 +112,7 @@ export function parseLigne(
     contact_fonction:     cell(row, mapping.contact_fonction),
     contact_telephone:    cell(row, mapping.contact_telephone),
     contact_email:        cell(row, mapping.contact_email),
+    horaires_ouverture,
   }
 }
 

@@ -5,6 +5,7 @@ import { parseFichier, type LigneImport, type PayloadImport } from '@/lib/excel/
 import { normaliserHeader } from '@/lib/excel/normaliser'
 import { mapperTournee } from '@/lib/excel/tournee-matcher'
 import { splitContactName } from '@/lib/contact-picker'
+import type { Horaires } from '@/types/horaires'
 
 // -----------------------------------------------------------------------------
 // Détection onglets « sans tournée » (import valide, tournee_id=NULL)
@@ -146,6 +147,9 @@ export async function importerBatch(
 
   const supabase = await createClient()
 
+  // Index unique des horaires existants pour la règle first-write-wins.
+  const horairesExistants = new Map<string, Horaires | null>()
+
   // Étape 1a : index établissements existants par code_schenk (priorité dédup #1)
   const codesSchenk = Array.from(
     new Set(
@@ -158,17 +162,18 @@ export async function importerBatch(
   if (codesSchenk.length > 0) {
     const { data: existantsBySchenk, error: errS } = await supabase
       .from('etablissement')
-      .select('id, code_schenk')
+      .select('id, code_schenk, horaires_ouverture')
       .is('deleted_at', null)
       .in('code_schenk', codesSchenk)
     if (errS) return { erreur: `Erreur lecture etabs (schenk) : ${errS.message}` }
     for (const e of existantsBySchenk ?? []) {
-      if (e.code_schenk) indexBySchenk.set(e.code_schenk, e.id)
+      const row = e as { id: string; code_schenk: string | null; horaires_ouverture: Horaires | null }
+      if (row.code_schenk) indexBySchenk.set(row.code_schenk, row.id)
+      horairesExistants.set(row.id, row.horaires_ouverture)
     }
   }
 
   // Étape 1b : index établissements existants par (tournée + enseigne + cp) (priorité dédup #2)
-  //           Seulement pour les lignes qui n'ont pas de code_schenk.
   const tourneeIds = Array.from(
     new Set(
       lignes
@@ -181,16 +186,21 @@ export async function importerBatch(
   if (tourneeIds.length > 0) {
     const { data: existants, error: errE } = await supabase
       .from('etablissement')
-      .select('id, enseigne, code_postal, tournee_id')
+      .select('id, enseigne, code_postal, tournee_id, horaires_ouverture')
       .is('deleted_at', null)
       .in('tournee_id', tourneeIds)
     if (errE) return { erreur: `Erreur lecture etabs : ${errE.message}` }
     for (const e of existants ?? []) {
+      const row = e as {
+        id: string; enseigne: string; code_postal: string | null;
+        tournee_id: string; horaires_ouverture: Horaires | null;
+      }
       indexByEnseigne.set(
-        `${e.tournee_id}::${cleDedup(e.enseigne, e.code_postal)}`,
-        e.id,
+        `${row.tournee_id}::${cleDedup(row.enseigne, row.code_postal)}`,
+        row.id,
       )
-      etabIdsPossibles.add(e.id)
+      etabIdsPossibles.add(row.id)
+      horairesExistants.set(row.id, row.horaires_ouverture)
     }
   }
 
@@ -226,7 +236,7 @@ export async function importerBatch(
       etabId = indexByEnseigne.get(cleEnseigne) ?? null
     }
 
-    const dbPayloadEtab = {
+    const dbPayloadEtab: Record<string, unknown> = {
       enseigne:            l.payload.enseigne,
       code_schenk:         l.payload.code_schenk,
       statut:              l.payload.statut,
@@ -239,6 +249,15 @@ export async function importerBatch(
       groupe_prix:         l.payload.groupe_prix,
       notes_internes:      l.payload.notes_internes,
       tournee_id:          l.tourneeId,
+    }
+
+    // Horaires : first-write-wins.
+    // - Nouveau etab (pas d'etabId) → écrit horaires_ouverture depuis Excel
+    // - Etab existant avec horaires null en BDD → écrit horaires_ouverture depuis Excel
+    // - Etab existant avec horaires déjà renseignés → ne touche PAS aux horaires
+    const horairesEnBDD = etabId ? horairesExistants.get(etabId) : undefined
+    if (!etabId || horairesEnBDD == null) {
+      dbPayloadEtab.horaires_ouverture = l.payload.horaires_ouverture
     }
 
     try {

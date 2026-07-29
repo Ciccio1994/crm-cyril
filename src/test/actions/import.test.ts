@@ -129,6 +129,7 @@ function makePayload(
     contact_fonction: opts.contact_fonction ?? null,
     contact_telephone: opts.contact_telephone ?? null,
     contact_email: opts.contact_email ?? null,
+    horaires_ouverture: opts.horaires_ouverture ?? null,
   }
 }
 
@@ -147,8 +148,11 @@ function ligne(
 }
 
 interface MockOpts {
-  etabsBySchenk?: { id: string; code_schenk: string }[]
-  etabsByEnseigne?: { id: string; enseigne: string; code_postal: string | null; tournee_id: string }[]
+  etabsBySchenk?: { id: string; code_schenk: string; horaires_ouverture?: unknown }[]
+  etabsByEnseigne?: {
+    id: string; enseigne: string; code_postal: string | null;
+    tournee_id: string; horaires_ouverture?: unknown
+  }[]
   contacts?: { id: string; etablissement_id: string; nom: string }[]
   insertedEtabId?: string
 }
@@ -254,6 +258,68 @@ describe('importerBatch — dédup par code_schenk (priorité #1)', () => {
     expect(res.data!.etablissements.crees).toBe(1)
     const insertPayload = mock.inserts.find((i) => i.table === 'etablissement')!.payload
     expect(insertPayload.code_schenk).toBe('C_NEW')
+  })
+})
+
+describe('importerBatch — first-write-wins horaires', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("n'écrase PAS horaires_ouverture si etab existant en a déjà", async () => {
+    const horairesExistants = {
+      lundi: [{ debut: '08:00', fin: '18:00' }],
+    }
+    const mock = mockSupabase({
+      etabsBySchenk: [
+        {
+          id: 'e_existant', code_schenk: 'C001',
+          horaires_ouverture: horairesExistants,
+        },
+      ],
+    })
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const res = await importerBatch([
+      ligne('X', '1936', 't1', {
+        code_schenk: 'C001',
+        horaires_ouverture: {
+          lundi: [{ debut: '09:00', fin: '17:00' }],  // Excel différent
+        },
+      }),
+    ])
+    expect(res.data!.etablissements.misAJour).toBe(1)
+    const upd = mock.updates.find((u) => u.table === 'etablissement')!
+    expect(upd.payload.horaires_ouverture).toBeUndefined()
+  })
+
+  it("écrit horaires_ouverture si etab existant a horaires null en BDD", async () => {
+    const mock = mockSupabase({
+      etabsBySchenk: [
+        { id: 'e_existant', code_schenk: 'C001', horaires_ouverture: null },
+      ],
+    })
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const horairesExcel = { lundi: [{ debut: '09:00', fin: '17:00' }] }
+    await importerBatch([
+      ligne('X', '1936', 't1', {
+        code_schenk: 'C001',
+        horaires_ouverture: horairesExcel,
+      }),
+    ])
+    const upd = mock.updates.find((u) => u.table === 'etablissement')!
+    expect(upd.payload.horaires_ouverture).toEqual(horairesExcel)
+  })
+
+  it("écrit horaires_ouverture pour un nouvel etab (INSERT)", async () => {
+    const mock = mockSupabase({ insertedEtabId: 'e_new' })
+    vi.mocked(createClient).mockResolvedValue(mock.supabase as never)
+    const horairesExcel = { mardi: [{ debut: '08:00', fin: '18:00' }] }
+    await importerBatch([
+      ligne('Nouveau', '1936', 't1', {
+        code_schenk: 'C_NEW',
+        horaires_ouverture: horairesExcel,
+      }),
+    ])
+    const ins = mock.inserts.find((i) => i.table === 'etablissement')!
+    expect(ins.payload.horaires_ouverture).toEqual(horairesExcel)
   })
 })
 

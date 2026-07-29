@@ -126,3 +126,27 @@ describe('detecterMapping — autres champs et fallbacks', () => {
     expect(detecterMapping(['Poste']).contact_fonction).toBe(0)
   })
 })
+
+describe('detecterMapping — colonnes jours (horaires)', () => {
+  it('reconnaît Lundi..Dimanche', () => {
+    const m = detecterMapping([
+      'Nom', 'Lundi', 'Mardi', 'Mercredi',
+      'Jeudi', 'Vendredi', 'Samedi', 'Dimanche',
+    ])
+    expect(m.jours).toEqual({
+      lundi: 1, mardi: 2, mercredi: 3, jeudi: 4,
+      vendredi: 5, samedi: 6, dimanche: 7,
+    })
+  })
+
+  it('insensible à la casse et aux accents', () => {
+    const m = detecterMapping(['LUNDI', 'mercredi'])
+    expect(m.jours?.lundi).toBe(0)
+    expect(m.jours?.mercredi).toBe(1)
+  })
+
+  it("aucun jour → mapping.jours = undefined", () => {
+    const m = detecterMapping(['Enseigne', 'Ville'])
+    expect(m.jours).toBeUndefined()
+  })
+})

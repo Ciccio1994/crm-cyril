@@ -1,4 +1,6 @@
 import { normaliserHeader } from './normaliser'
+import type { JourSemaine } from '@/types/horaires'
+import { JOURS } from '@/types/horaires'
 
 export interface Mapping {
   code_schenk?: number
@@ -17,6 +19,7 @@ export interface Mapping {
   contact_fonction?: number
   contact_telephone?: number
   contact_email?: number
+  jours?: Partial<Record<JourSemaine, number>>
   colonnesInconnues: string[]
 }
 
@@ -34,7 +37,7 @@ const IGNORE: string[] = [
 // Attention : les alias contact_* passent AVANT les alias etab_* pour éviter
 // que « Email contact » soit capturé par « Email » plat.
 const ALIASES_SIMPLES: Record<
-  Exclude<keyof Mapping, 'colonnesInconnues' | 'enseigne' | 'notes_nom_1' | 'notes_nom_2' | 'adresse_ligne_1'>,
+  Exclude<keyof Mapping, 'colonnesInconnues' | 'enseigne' | 'notes_nom_1' | 'notes_nom_2' | 'adresse_ligne_1' | 'jours'>,
   string[]
 > = {
   code_schenk: ['n', 'no', 'numero', 'code schenk', 'code'],
@@ -146,6 +149,17 @@ export function detecterMapping(headers: (string | null | undefined)[]): Mapping
       utilises.add(idx)
     }
   }
+
+  // Étape 3bis : colonnes jours (Lundi..Dimanche) pour horaires
+  const jours: Partial<Record<JourSemaine, number>> = {}
+  for (const j of JOURS) {
+    const idx = findIdx(normalises, utilises, j)
+    if (idx !== undefined) {
+      jours[j] = idx
+      utilises.add(idx)
+    }
+  }
+  if (Object.keys(jours).length > 0) mapping.jours = jours
 
   // Étape 4 : colonnes inconnues (hors ignore list)
   headers.forEach((h, i) => {

@@ -117,6 +117,36 @@ describe('parseLigne — format simple', () => {
   })
 })
 
+describe('parseLigne — horaires', () => {
+  it('parse les colonnes jours en horaires_ouverture', () => {
+    const headers = ['Nom', 'Lundi', 'Mardi', 'Mercredi']
+    const m = detecterMapping(headers)
+    const p = parseLigne(['Café X', '8h-18h', 'Fermé', ''], m)!
+    expect(p.horaires_ouverture).toEqual({
+      lundi: [{ debut: '08:00', fin: '18:00' }],
+      mardi: null,
+    })
+  })
+
+  it('horaires_ouverture = null si aucun jour reconnu', () => {
+    const m = detecterMapping(['Enseigne', 'Ville'])
+    const p = parseLigne(['Café Y', 'Sion'], m)!
+    expect(p.horaires_ouverture).toBeNull()
+  })
+
+  it('double créneau parsé correctement', () => {
+    const headers = ['Nom', 'Lundi']
+    const m = detecterMapping(headers)
+    const p = parseLigne(['Café Z', '8h-12h / 14h-18h'], m)!
+    expect(p.horaires_ouverture).toEqual({
+      lundi: [
+        { debut: '08:00', fin: '12:00' },
+        { debut: '14:00', fin: '18:00' },
+      ],
+    })
+  })
+})
+
 describe('parseFichier — détection auto de la ligne d\'en-tête', () => {
   it('trouve la ligne header même en ligne 3 (précédée de 2 lignes de titre)', async () => {
     const buffer = buildXlsx([
