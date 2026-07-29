@@ -305,4 +305,24 @@ describe('executerOutil — lireVisites', () => {
     )
     expect(r.ok).toBe(false)
   })
+
+  it('retourne ok: false quand Supabase retourne une erreur RLS', async () => {
+    const mockLimit = vi.fn().mockResolvedValue({ data: null, error: { message: 'RLS denied' } })
+    const mockOrder = vi.fn(() => ({ limit: mockLimit }))
+    const mockIs = vi.fn(() => ({ order: mockOrder }))
+    const mockEq = vi.fn(() => ({ is: mockIs }))
+    const mockSelect = vi.fn(() => ({ eq: mockEq }))
+    const mockFrom = vi.fn(() => ({ select: mockSelect }))
+
+    mockCreateClient.mockResolvedValue({ from: mockFrom } as unknown as Awaited<ReturnType<typeof createClient>>)
+
+    const r = await executerOutil(
+      'lireVisites',
+      { etablissement_id: '11111111-1111-4111-8111-111111111111', limite: 5 },
+      null,
+    )
+
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erreur).toBe('Erreur lecture visites : RLS denied')
+  })
 })

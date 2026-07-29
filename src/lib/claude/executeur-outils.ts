@@ -64,13 +64,14 @@ export async function executerOutil(
       const p = SCHEMAS_OUTILS.lireVisites.safeParse(input)
       if (!p.success) return { ok: false, erreur: p.error.issues.map(i => i.message).join(' — ') }
       const supabase = await createClient()
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('visite')
         .select('date_visite, duree_minutes, notes, est_manquee')
         .eq('etablissement_id', p.data.etablissement_id)
         .is('deleted_at', null)
         .order('date_visite', { ascending: false })
         .limit(p.data.limite)
+      if (error) return { ok: false, erreur: `Erreur lecture visites : ${error.message}` }
       return { ok: true, contenu: JSON.stringify(data ?? []) }
     }
 

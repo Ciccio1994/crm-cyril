@@ -29,10 +29,13 @@ export const SCHEMAS_OUTILS = {
   }),
   mettreAJourHoraires: z.object({
     etablissement_id: z.string().uuid(),
-    horaires: z.record(z.string(), z.union([
-      z.array(z.object({ debut: z.string(), fin: z.string() })),
-      z.null(),
-    ])),
+    horaires: z.record(
+      z.enum(['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']),
+      z.union([
+        z.array(z.object({ debut: z.string(), fin: z.string() })),
+        z.null(),
+      ]),
+    ),
   }),
   mettreAJourEtablissement: z.object({
     id: z.string().uuid(),

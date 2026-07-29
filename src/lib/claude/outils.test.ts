@@ -86,6 +86,14 @@ describe('SCHEMAS_OUTILS', () => {
     expect(r.success).toBe(true)
     if (r.success) expect(r.data.limite).toBe(10)
   })
+
+  it('mettreAJourHoraires refuse une clé jour anglaise', () => {
+    const r = SCHEMAS_OUTILS.mettreAJourHoraires.safeParse({
+      etablissement_id: '11111111-1111-4111-8111-111111111111',
+      horaires: { monday: null },
+    })
+    expect(r.success).toBe(false)
+  })
 })
 
 describe('classification lecture / modification', () => {
