@@ -19,6 +19,7 @@ import { ActionsRapides } from './actions-rapides'
 import { CarteOffre } from '@/components/offres/carte-offre'
 import { SectionHoraires } from './section-horaires'
 import { BoutonChatFiche } from './bouton-chat-fiche'
+import { BoutonEnrichirGoogle } from './bouton-enrichir-google'
 import { estNomPersonne } from '@/lib/etablissements/nom-personne'
 import type {
   Contact,
@@ -127,8 +128,14 @@ export function FicheEtablissement({
 
       <ActionsRapides etab={etablissement} />
 
-      <div className="px-4 pt-3">
+      <div className="space-y-2 px-4 pt-3">
         <BoutonChatFiche etablissementId={etablissement.id} />
+        {estNomPersonne(etablissement.enseigne) && (
+          <BoutonEnrichirGoogle
+            etablissementId={etablissement.id}
+            enseigneActuelle={etablissement.enseigne}
+          />
+        )}
       </div>
 
       <Tabs defaultValue="info" className="px-4 pt-4">
