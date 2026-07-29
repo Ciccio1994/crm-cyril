@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { formatDateSuisse } from '@/lib/format'
 import { FormulaireVisite } from './formulaire-visite'
 import { BoutonVisiteManquee } from './bouton-visite-manquee'
+import { notifierChangement } from '@/lib/sync/revalidation'
 import type { MotifVisiteManquee, Visite } from '@/types/database'
 
 interface OngletVisitesProps {
@@ -35,6 +36,7 @@ export function OngletVisites({
   }
   function onSuccess() {
     router.refresh()
+    notifierChangement()
   }
 
   return (

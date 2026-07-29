@@ -33,6 +33,7 @@ type FormState = {
   nom: string
   fonction: string
   telephone: string
+  telephone_mobile: string
   email: string
   est_principal: boolean
   notes: string
@@ -40,13 +41,14 @@ type FormState = {
 
 function initFrom(c?: Contact | null): FormState {
   return {
-    prenom:        c?.prenom ?? '',
-    nom:           c?.nom ?? '',
-    fonction:      c?.fonction ?? '',
-    telephone:     c?.telephone ?? '',
-    email:         c?.email ?? '',
-    est_principal: c?.est_principal ?? false,
-    notes:         c?.notes ?? '',
+    prenom:           c?.prenom ?? '',
+    nom:              c?.nom ?? '',
+    fonction:         c?.fonction ?? '',
+    telephone:        c?.telephone ?? '',
+    telephone_mobile: c?.telephone_mobile ?? '',
+    email:            c?.email ?? '',
+    est_principal:    c?.est_principal ?? false,
+    notes:            c?.notes ?? '',
   }
 }
 
@@ -87,10 +89,11 @@ export function FormulaireContact({
       // Ne remplace pas ce que l'utilisateur a déjà tapé
       setState((s) => ({
         ...s,
-        prenom:    s.prenom    || preselect.prenom    || '',
-        nom:       s.nom       || preselect.nom       || '',
-        telephone: s.telephone || preselect.telephone || '',
-        email:     s.email     || preselect.email     || '',
+        prenom:           s.prenom           || preselect.prenom           || '',
+        nom:              s.nom              || preselect.nom              || '',
+        telephone:        s.telephone        || preselect.telephone        || '',
+        telephone_mobile: s.telephone_mobile || preselect.telephone_mobile || '',
+        email:            s.email            || preselect.email            || '',
       }))
     } finally {
       setPicking(false)
@@ -108,11 +111,12 @@ export function FormulaireContact({
     const payload = {
       nom: state.nom.trim(),
       prenom:     clean(state.prenom),
-      fonction:   clean(state.fonction),
-      telephone:  clean(state.telephone),
-      email:      clean(state.email),
-      est_principal: state.est_principal,
-      notes:      clean(state.notes),
+      fonction:         clean(state.fonction),
+      telephone:        clean(state.telephone),
+      telephone_mobile: clean(state.telephone_mobile),
+      email:            clean(state.email),
+      est_principal:    state.est_principal,
+      notes:            clean(state.notes),
     }
 
     startTransition(async () => {
@@ -199,12 +203,22 @@ export function FormulaireContact({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="c-tel">Téléphone</Label>
+            <Label htmlFor="c-tel">Téléphone fixe</Label>
             <Input
               id="c-tel"
               inputMode="tel"
               value={state.telephone}
               onChange={(e) => set('telephone', e.target.value)}
+              className="h-12 text-base"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="c-tel-mobile">Portable</Label>
+            <Input
+              id="c-tel-mobile"
+              inputMode="tel"
+              value={state.telephone_mobile}
+              onChange={(e) => set('telephone_mobile', e.target.value)}
               className="h-12 text-base"
             />
           </div>

@@ -12,12 +12,14 @@ import {
 } from '@/lib/sync/lecture-dexie'
 import { hydraterTables } from '@/lib/sync/hydrate'
 import { useOnline } from '@/hooks/use-online'
+import { useRevalidation } from '@/lib/sync/revalidation'
 import type { Contact, Etablissement, Offre, Visite } from '@/types/database'
 
 export default function EtablissementPage() {
   const params = useParams<{ id: string }>()
   const id = params.id
   const online = useOnline()
+  const revalidation = useRevalidation()
   const [etab, setEtab] = useState<Etablissement | null | undefined>(undefined)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [visites, setVisites] = useState<Visite[]>([])
@@ -71,7 +73,7 @@ export default function EtablissementPage() {
     return () => {
       cancelled = true
     }
-  }, [id, online])
+  }, [id, online, revalidation])
 
   if (etab === undefined) {
     return <p className="p-6 text-sm text-muted-foreground">Chargement…</p>

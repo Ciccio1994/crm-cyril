@@ -6,10 +6,12 @@ import { ListeEtablissements } from '@/components/etablissements/liste-etablisse
 import { lireEtablissementsDexie } from '@/lib/sync/lecture-dexie'
 import { hydraterTables } from '@/lib/sync/hydrate'
 import { useOnline } from '@/hooks/use-online'
+import { useRevalidation } from '@/lib/sync/revalidation'
 import type { Etablissement } from '@/types/database'
 
 export default function EtablissementsPage() {
   const online = useOnline()
+  const revalidation = useRevalidation()
   const [data, setData] = useState<Etablissement[] | null>(null)
   const [origineLocale, setOrigineLocale] = useState(false)
 
@@ -39,7 +41,7 @@ export default function EtablissementsPage() {
     return () => {
       cancelled = true
     }
-  }, [online])
+  }, [online, revalidation])
 
   if (!data) {
     return <p className="p-6 text-sm text-muted-foreground">Chargement…</p>

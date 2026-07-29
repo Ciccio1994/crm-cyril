@@ -93,6 +93,7 @@ export interface Contact {
   nom: string
   fonction: string | null
   telephone: string | null
+  telephone_mobile: string | null
   email: string | null
   est_principal: boolean
   notes: string | null

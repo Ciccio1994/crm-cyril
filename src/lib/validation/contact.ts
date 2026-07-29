@@ -6,6 +6,7 @@ export const ContactCreateSchema = z.object({
   prenom:           z.string().max(100).nullable().optional(),
   fonction:         z.string().max(100).nullable().optional(),
   telephone:        z.string().max(30).nullable().optional(),
+  telephone_mobile: z.string().max(30).nullable().optional(),
   email:            z.string().email().nullable().optional(),
   est_principal:    z.boolean().default(false),
   notes:            z.string().nullable().optional(),

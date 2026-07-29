@@ -8,12 +8,14 @@ import { WidgetOffresAccueil } from '@/components/offres/widget-offres-accueil'
 import { lireEtablissementsDexie } from '@/lib/sync/lecture-dexie'
 import { hydraterTables } from '@/lib/sync/hydrate'
 import { useOnline } from '@/hooks/use-online'
+import { useRevalidation } from '@/lib/sync/revalidation'
 import { formatDateSuisse } from '@/lib/format'
 import { estClient, estProspect } from '@/lib/objectif/regles'
 import type { Etablissement } from '@/types/database'
 
 export default function AccueilPage() {
   const online = useOnline()
+  const revalidation = useRevalidation()
   const [clients, setClients] = useState<Etablissement[]>([])
   const [prospects, setProspects] = useState<Etablissement[]>([])
   const [pret, setPret] = useState(false)
@@ -52,7 +54,7 @@ export default function AccueilPage() {
     return () => {
       cancelled = true
     }
-  }, [online])
+  }, [online, revalidation])
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">

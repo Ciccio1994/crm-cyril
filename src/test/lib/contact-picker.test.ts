@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { splitContactName, isContactPickerSupported } from '@/lib/contact-picker'
+import {
+  splitContactName,
+  isContactPickerSupported,
+  extraireTelephones,
+} from '@/lib/contact-picker'
 
 describe('splitContactName', () => {
   it('sépare "Prénom Nom" (dernier espace = séparateur)', () => {
@@ -48,5 +52,42 @@ describe('splitContactName', () => {
 describe('isContactPickerSupported', () => {
   it("renvoie false en environnement de test (jsdom sans navigator.contacts)", () => {
     expect(isContactPickerSupported()).toBe(false)
+  })
+})
+
+describe('extraireTelephones', () => {
+  it('retourne {} si tableau vide ou undefined', () => {
+    expect(extraireTelephones(undefined)).toEqual({})
+    expect(extraireTelephones([])).toEqual({})
+    expect(extraireTelephones(['', '  '])).toEqual({})
+  })
+
+  it('un seul numéro → telephone', () => {
+    expect(extraireTelephones(['027 322 12 34'])).toEqual({
+      telephone: '027 322 12 34',
+    })
+  })
+
+  it('deux numéros → telephone + telephone_mobile', () => {
+    expect(extraireTelephones(['027 322 12 34', '079 555 44 33'])).toEqual({
+      telephone: '027 322 12 34',
+      telephone_mobile: '079 555 44 33',
+    })
+  })
+
+  it('trois numéros → prend seulement les 2 premiers', () => {
+    expect(
+      extraireTelephones(['027 322 12 34', '079 555 44 33', '076 111 22 33']),
+    ).toEqual({
+      telephone: '027 322 12 34',
+      telephone_mobile: '079 555 44 33',
+    })
+  })
+
+  it('trim les espaces des numéros', () => {
+    expect(extraireTelephones(['  027 322  ', '  079 555  '])).toEqual({
+      telephone: '027 322',
+      telephone_mobile: '079 555',
+    })
   })
 })

@@ -12,6 +12,7 @@ import {
   creerOffre, mettreAJourOffre, supprimerOffre, uploadOffrePdf,
 } from '@/actions/offres'
 import { executerAvecSync, executerAvecSyncCible } from '@/lib/sync/wrapper'
+import { notifierChangement } from '@/lib/sync/revalidation'
 import type { Offre } from '@/types/database'
 
 interface Props { mode: 'creation' | 'edition'; initial?: Offre }
@@ -100,6 +101,7 @@ export function FormulaireOffre({ mode, initial }: Props) {
         setErreur(typeof r.erreur === 'string' ? r.erreur : 'Erreur')
         return
       }
+      notifierChangement()
       router.push('/admin/offres')
     })
   }
@@ -112,6 +114,7 @@ export function FormulaireOffre({ mode, initial }: Props) {
         'supprimerOffre', initial.id, {},
         (id) => supprimerOffre(id),
       )
+      notifierChangement()
       router.push('/admin/offres')
     })
   }

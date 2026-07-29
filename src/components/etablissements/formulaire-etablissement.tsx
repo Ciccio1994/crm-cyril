@@ -20,6 +20,7 @@ import {
   mettreAJourEtablissement,
 } from '@/actions/etablissement'
 import { executerAvecSync, executerAvecSyncCible } from '@/lib/sync/wrapper'
+import { notifierChangement } from '@/lib/sync/revalidation'
 import { ChampAdresseAutocomplete } from './champ-adresse-autocomplete'
 import type { DetailsLieu } from '@/lib/geocode'
 import type {
@@ -184,6 +185,7 @@ export function FormulaireEtablissement({
         setErreur('Impossible d\'enregistrer. Vérifie les champs.')
         return
       }
+      notifierChangement()
       // Si offline (differee), on renvoie vers la liste plutôt que la fiche (id inconnu)
       if ('differee' in result && result.differee) {
         router.push('/etablissements')

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { telHref } from '@/lib/format'
 import { supprimerContact } from '@/actions/contact'
 import { executerAvecSyncCible } from '@/lib/sync/wrapper'
+import { notifierChangement } from '@/lib/sync/revalidation'
 import { FormulaireContact } from './formulaire-contact'
 import type { Contact } from '@/types/database'
 
@@ -34,6 +35,7 @@ export function OngletContacts({
   }
   function onSuccess() {
     router.refresh()
+    notifierChangement()
   }
   function onSupprimer(contact: Contact) {
     if (
@@ -48,6 +50,7 @@ export function OngletContacts({
         (id) => supprimerContact(id),
       )
       router.refresh()
+      notifierChangement()
     })
   }
 
