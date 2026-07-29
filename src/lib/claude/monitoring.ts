@@ -31,6 +31,36 @@ interface DataParametre {
   seuil_chf: number
 }
 
+// La colonne `parametre.valeur` est JSONB depuis la migration 003 : Supabase la
+// désérialise automatiquement côté client. On accepte donc soit un objet déjà
+// parsé, soit (rétrocompatibilité) une chaîne JSON produite par du vieux code.
+// Gère aussi les clés du seed V0 (`tokens_mois_courant`, `seuil_alerte_chf`).
+export function normaliserDataParametre(valeur: unknown): DataParametre {
+  const defauts: DataParametre = { tokens_mois: 0, cout_chf_mois: 0, seuil_chf: 30 }
+  if (valeur == null) return defauts
+  let brut: unknown = valeur
+  if (typeof valeur === 'string') {
+    try {
+      brut = JSON.parse(valeur)
+    } catch {
+      return defauts
+    }
+  }
+  if (typeof brut !== 'object' || brut === null) return defauts
+  const r = brut as Record<string, unknown>
+  return {
+    tokens_mois:
+      typeof r.tokens_mois === 'number' ? r.tokens_mois
+      : typeof r.tokens_mois_courant === 'number' ? r.tokens_mois_courant
+      : 0,
+    cout_chf_mois: typeof r.cout_chf_mois === 'number' ? r.cout_chf_mois : 0,
+    seuil_chf:
+      typeof r.seuil_chf === 'number' ? r.seuil_chf
+      : typeof r.seuil_alerte_chf === 'number' ? r.seuil_alerte_chf
+      : 30,
+  }
+}
+
 export async function ajouterConsommation(
   modele: ModeleClaude,
   tokensIn: number,
@@ -44,9 +74,7 @@ export async function ajouterConsommation(
     .eq('cle', cle)
     .maybeSingle()
 
-  const prec: DataParametre = data?.valeur
-    ? (JSON.parse(data.valeur) as DataParametre)
-    : { tokens_mois: 0, cout_chf_mois: 0, seuil_chf: 30 }
+  const prec = normaliserDataParametre(data?.valeur)
 
   const nouveau: EtatMonitoring = {
     tokens_mois:   prec.tokens_mois + tokensIn + tokensOut,
@@ -56,13 +84,14 @@ export async function ajouterConsommation(
   }
   nouveau.au_dela_seuil = estAuDelaSeuil(nouveau.cout_chf_mois, nouveau.seuil_chf)
 
+  // JSONB : passer l'objet directement (pas de JSON.stringify).
   await supabase.from('parametre').upsert({
     cle,
-    valeur: JSON.stringify({
+    valeur: {
       tokens_mois:   nouveau.tokens_mois,
       cout_chf_mois: nouveau.cout_chf_mois,
       seuil_chf:     nouveau.seuil_chf,
-    }),
+    },
   })
   return nouveau
 }
@@ -75,9 +104,6 @@ export async function lireMonitoring(): Promise<EtatMonitoring> {
     .eq('cle', 'monitoring_consommation_claude')
     .maybeSingle()
 
-  const p: DataParametre = data?.valeur
-    ? (JSON.parse(data.valeur) as DataParametre)
-    : { tokens_mois: 0, cout_chf_mois: 0, seuil_chf: 30 }
-
+  const p = normaliserDataParametre(data?.valeur)
   return { ...p, au_dela_seuil: estAuDelaSeuil(p.cout_chf_mois, p.seuil_chf) }
 }

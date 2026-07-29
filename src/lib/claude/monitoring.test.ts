@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculerCoutCHF, estAuDelaSeuil } from './monitoring'
+import { calculerCoutCHF, estAuDelaSeuil, normaliserDataParametre } from './monitoring'
 
 describe('calculerCoutCHF', () => {
   it('claude-haiku-4-5 : 1$/1M in + 5$/1M out, converti CHF (~0.88)', () => {
@@ -54,5 +54,36 @@ describe('estAuDelaSeuil', () => {
   it('false quand bien en dessous du seuil', () => {
     expect(estAuDelaSeuil(0, 30)).toBe(false)
     expect(estAuDelaSeuil(1, 30)).toBe(false)
+  })
+})
+
+describe('normaliserDataParametre', () => {
+  it('accepte un objet déjà parsé (parametre.valeur JSONB)', () => {
+    const r = normaliserDataParametre({ tokens_mois: 100, cout_chf_mois: 1.5, seuil_chf: 30 })
+    expect(r).toEqual({ tokens_mois: 100, cout_chf_mois: 1.5, seuil_chf: 30 })
+  })
+
+  it('accepte une chaîne JSON (rétrocompatibilité TEXT)', () => {
+    const r = normaliserDataParametre('{"tokens_mois":50,"cout_chf_mois":0.8,"seuil_chf":20}')
+    expect(r).toEqual({ tokens_mois: 50, cout_chf_mois: 0.8, seuil_chf: 20 })
+  })
+
+  it('migre les clés du seed V0 (tokens_mois_courant, seuil_alerte_chf)', () => {
+    const r = normaliserDataParametre({ tokens_mois_courant: 200, seuil_alerte_chf: 50 })
+    expect(r).toEqual({ tokens_mois: 200, cout_chf_mois: 0, seuil_chf: 50 })
+  })
+
+  it('retourne les défauts sur null/undefined', () => {
+    expect(normaliserDataParametre(null)).toEqual({ tokens_mois: 0, cout_chf_mois: 0, seuil_chf: 30 })
+    expect(normaliserDataParametre(undefined)).toEqual({ tokens_mois: 0, cout_chf_mois: 0, seuil_chf: 30 })
+  })
+
+  it('retourne les défauts sur chaîne invalide', () => {
+    expect(normaliserDataParametre('pas du json')).toEqual({ tokens_mois: 0, cout_chf_mois: 0, seuil_chf: 30 })
+  })
+
+  it('ne crash PAS avec un objet imbriqué inattendu (régression bug "[object Object]")', () => {
+    // Cas d'origine du bug : JSON.parse(objet) → String(objet) = "[object Object]" → SyntaxError
+    expect(() => normaliserDataParametre({ tokens_mois_courant: 0, seuil_alerte_chf: 50 })).not.toThrow()
   })
 })
