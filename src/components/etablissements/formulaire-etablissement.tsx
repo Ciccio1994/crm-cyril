@@ -432,6 +432,7 @@ export function FormulaireEtablissement({
                 state.adresse_ligne_1,
                 state.code_postal,
                 state.ville,
+                state.telephone_principal,
               ].filter((s) => s.trim().length > 0).join(' ') || undefined}
             />
           </div>
