@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type Anthropic from '@anthropic-ai/sdk'
 import { useChat } from '@/hooks/use-chat'
 import { lireConversation } from '@/actions/chat'
+import { definirModeleConversation } from '@/actions/chat-modele'
 import { notifierChangement } from '@/lib/sync/revalidation'
 import type { ModeleClaude, ActionEnAttente } from '@/types/conversation'
 import { BulleMessage } from './bulle-message'
@@ -39,6 +40,10 @@ export function InterfaceChat({ conversationId, etablissementId, modeleInitial }
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [etat.echanges, etat.actionsEnAttente.length])
+
+  useEffect(() => {
+    void definirModeleConversation(conversationId, modele)
+  }, [modele, conversationId])
 
   useEffect(() => {
     void lireConversation(conversationId).then((r) => {
