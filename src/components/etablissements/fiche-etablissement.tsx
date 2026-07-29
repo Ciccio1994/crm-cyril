@@ -18,6 +18,7 @@ import { OngletVisites } from '@/components/visites/onglet-visites'
 import { ActionsRapides } from './actions-rapides'
 import { CarteOffre } from '@/components/offres/carte-offre'
 import { SectionHoraires } from './section-horaires'
+import { BoutonChatFiche } from './bouton-chat-fiche'
 import type {
   Contact,
   Etablissement,
@@ -106,6 +107,7 @@ export function FicheEtablissement({
               />
             </div>
           </div>
+          <BoutonChatFiche etablissementId={etablissement.id} />
           <Link
             href={`/etablissements/${etablissement.id}/modifier`}
             className={cn(

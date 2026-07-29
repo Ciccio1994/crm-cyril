@@ -25,3 +25,11 @@ ALTER TABLE conversation
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('chat-images', 'chat-images', false)
 ON CONFLICT (id) DO NOTHING;
+
+-- Policies RLS bucket chat-images (accès owner uniquement)
+CREATE POLICY "chat_images_owner_read" ON storage.objects
+  FOR SELECT USING (bucket_id = 'chat-images' AND auth.uid() = owner);
+CREATE POLICY "chat_images_owner_write" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'chat-images' AND auth.uid() = owner);
+CREATE POLICY "chat_images_owner_delete" ON storage.objects
+  FOR DELETE USING (bucket_id = 'chat-images' AND auth.uid() = owner);

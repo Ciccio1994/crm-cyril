@@ -4,8 +4,7 @@ import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 
-// TODO T7 : décommenter quand src/lib/chat/upload-image.ts sera créé
-// import { uploaderImageChat } from '@/lib/chat/upload-image'
+import { uploaderImageChat } from '@/lib/chat/upload-image'
 
 interface Props {
   onEnvoyer: (texte: string, imageUrl?: string) => void
@@ -29,14 +28,10 @@ export function Composer({ onEnvoyer, desactive, modele, onChangerModele }: Prop
 
     if (image) {
       setUploading(true)
-      // TODO T7 : décommenter quand src/lib/chat/upload-image.ts sera créé
-      // const r = await uploaderImageChat(image.file)
-      // setUploading(false)
-      // if ('erreur' in r) { setErreurImg(r.erreur); return }
-      // imageUrl = r.url
+      const r = await uploaderImageChat(image.file)
       setUploading(false)
-      setErreurImg('Upload image disponible en T7')
-      return
+      if ('erreur' in r) { setErreurImg(r.erreur); return }
+      imageUrl = r.url
     }
 
     const capture = texte
