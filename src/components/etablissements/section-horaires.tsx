@@ -10,6 +10,8 @@ import {
 import { JOURS } from '@/types/horaires'
 import type { Horaires, JourSemaine } from '@/types/horaires'
 import { BoutonRecupererGoogle } from './bouton-recuperer-google'
+import { BoutonEnrichirGoogle } from './bouton-enrichir-google'
+import { estNomPersonne } from '@/lib/etablissements/nom-personne'
 
 const LIBELLES: Record<JourSemaine, string> = {
   lundi: 'Lundi', mardi: 'Mardi', mercredi: 'Mercredi', jeudi: 'Jeudi',
@@ -18,10 +20,11 @@ const LIBELLES: Record<JourSemaine, string> = {
 
 interface Props {
   etablissementId: string
+  enseigne: string
   horaires: Horaires | null
 }
 
-export function SectionHoraires({ etablissementId, horaires }: Props) {
+export function SectionHoraires({ etablissementId, enseigne, horaires }: Props) {
   const [now, setNow] = useState(() => new Date().toISOString())
 
   useEffect(() => {
@@ -33,9 +36,18 @@ export function SectionHoraires({ etablissementId, horaires }: Props) {
   if (!horaires || Object.keys(horaires).length === 0) {
     return (
       <Card className="space-y-3 p-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Horaires
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Horaires
+          </h3>
+          {!estNomPersonne(enseigne) && (
+            <BoutonEnrichirGoogle
+              etablissementId={etablissementId}
+              enseigneActuelle={enseigne}
+              mode="compact"
+            />
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">
           Aucun horaire renseigné pour cet établissement.
         </p>
@@ -55,6 +67,13 @@ export function SectionHoraires({ etablissementId, horaires }: Props) {
           Horaires
         </h3>
         <div className="flex items-center gap-2">
+          {!estNomPersonne(enseigne) && (
+            <BoutonEnrichirGoogle
+              etablissementId={etablissementId}
+              enseigneActuelle={enseigne}
+              mode="compact"
+            />
+          )}
           <BoutonRecupererGoogle etablissementId={etablissementId} mode="actualiser" />
           <Badge
             className={

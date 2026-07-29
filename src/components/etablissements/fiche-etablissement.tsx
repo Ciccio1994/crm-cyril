@@ -228,6 +228,7 @@ export function FicheEtablissement({
           )}
           <SectionHoraires
             etablissementId={etablissement.id}
+            enseigne={etablissement.enseigne}
             horaires={etablissement.horaires_ouverture}
           />
           {offresActives.length > 0 && (

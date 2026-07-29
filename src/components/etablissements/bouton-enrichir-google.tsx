@@ -16,9 +16,12 @@ import { ModaleChoixGoogle } from './modale-choix-google'
 interface Props {
   etablissementId: string
   enseigneActuelle: string
+  // 'grand' : bouton pleine largeur h-12 (fiche avec nom personne détecté)
+  // 'compact' : lien texte discret (à côté du bouton "🔄 Actualiser horaires")
+  mode?: 'grand' | 'compact'
 }
 
-export function BoutonEnrichirGoogle({ etablissementId, enseigneActuelle }: Props) {
+export function BoutonEnrichirGoogle({ etablissementId, enseigneActuelle, mode = 'grand' }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [resultat, setResultat] = useState<ResultatEnrichissement | null>(null)
@@ -31,16 +34,19 @@ export function BoutonEnrichirGoogle({ etablissementId, enseigneActuelle }: Prop
   }
 
   function onClick() {
+    let forceEcrasement = false
     if (!estNomPersonne(enseigneActuelle)) {
       const ok = confirm(
         `L'enseigne actuelle « ${enseigneActuelle} » ne semble pas être un nom de personne. ` +
-        `Google Places pourrait proposer un autre nom. Continuer ?`,
+        `Google Places pourrait proposer un autre établissement (homonyme, voisin). ` +
+        `Remplacer quand même si Google trouve mieux ?`,
       )
       if (!ok) return
+      forceEcrasement = true
     }
     reset()
     startTransition(async () => {
-      const r = await recupererNomEtHorairesDepuisGoogle(etablissementId)
+      const r = await recupererNomEtHorairesDepuisGoogle(etablissementId, forceEcrasement)
       if (r.erreur) { setErreur(r.erreur); return }
       if (!r.data) return
       switch (r.data.type) {
@@ -74,17 +80,35 @@ export function BoutonEnrichirGoogle({ etablissementId, enseigneActuelle }: Prop
     })
   }
 
+  const libelleGrand = pending
+    ? 'Recherche Google…'
+    : estNomPersonne(enseigneActuelle)
+      ? '🔍 Récupérer nom + horaires depuis Google Maps'
+      : '🔍 Vérifier nom + horaires Google'
+
   return (
-    <div className="space-y-2">
-      <Button
-        type="button"
-        variant="outline"
-        onClick={onClick}
-        disabled={pending}
-        className="h-12 w-full text-base"
-      >
-        {pending ? 'Recherche Google…' : '🔍 Récupérer nom + horaires depuis Google Maps'}
-      </Button>
+    <div className={mode === 'compact' ? 'flex flex-col items-end gap-1' : 'space-y-2'}>
+      {mode === 'compact' ? (
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={pending}
+          className="text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+          aria-label="Vérifier nom et horaires via Google Maps"
+        >
+          {pending ? 'Recherche…' : '🔍 Vérifier Google'}
+        </button>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClick}
+          disabled={pending}
+          className="h-12 w-full text-base"
+        >
+          {libelleGrand}
+        </Button>
+      )}
       {erreur && <p className="text-sm text-destructive">❌ {erreur}</p>}
       {messageAucun && (
         <p className="text-sm text-muted-foreground">⚠️ {messageAucun}</p>

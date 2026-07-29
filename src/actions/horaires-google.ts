@@ -250,21 +250,28 @@ function construireStrategies(etat: EtatFiche, nomCommercialNotes: string | null
   })
 }
 
-// Écrit dans la BDD un résultat auto-accepté (haute confiance).
+// Écrit dans la BDD un résultat auto-accepté (haute confiance) ou choisi manuellement.
+// - En mode auto (haute confiance uniquement) : n'écrase l'enseigne QUE si nom personne
+// - En mode forcé (choix manuel utilisateur OU confirm bypass) : écrase toujours si Google a un nom
 async function appliquerResultat(
   supabase: Awaited<ReturnType<typeof createClient>>,
   etablissementId: string,
   etat: EtatFiche,
   place: GooglePlace,
   strategieNom: string,
+  forceEcrasement: boolean = false,
 ): Promise<ResultatEnrichissement> {
   const nouveauNom = place.displayName?.text?.trim() ?? null
   const nouveauxHoraires = parseGooglePeriods(place.regularOpeningHours?.periods)
 
-  // Sécurité : n'écrase l'enseigne QUE si l'actuelle est un nom personne
   const doitEcraserEnseigne =
-    nouveauNom != null && nouveauNom !== etat.enseigne && estNomPersonne(etat.enseigne)
-  const doitEcrireHoraires = nouveauxHoraires !== null && etat.horaires_ouverture == null
+    nouveauNom != null &&
+    nouveauNom !== etat.enseigne &&
+    (forceEcrasement || estNomPersonne(etat.enseigne))
+  // Horaires : first-write-wins par défaut ; en mode forcé, on écrase aussi
+  const doitEcrireHoraires =
+    nouveauxHoraires !== null &&
+    (forceEcrasement || etat.horaires_ouverture == null)
 
   const patch: Record<string, unknown> = {}
   if (doitEcraserEnseigne) patch.enseigne = nouveauNom
@@ -287,6 +294,7 @@ async function appliquerResultat(
 
 export async function recupererNomEtHorairesDepuisGoogle(
   etablissementId: string,
+  forceEcrasement: boolean = false,
 ): Promise<ActionResult<ReponseEnrichissement>> {
   const supabase = await createClient()
   const { data: etab, error: errE } = await supabase
@@ -319,7 +327,7 @@ export async function recupererNomEtHorairesDepuisGoogle(
     // Haute confiance trouvée → auto-accept immédiat
     const hauteConfiance = evals.find((e) => e.confiance === 'haute')
     if (hauteConfiance) {
-      const resultat = await appliquerResultat(supabase, etablissementId, etat, hauteConfiance.place, strat.nom)
+      const resultat = await appliquerResultat(supabase, etablissementId, etat, hauteConfiance.place, strat.nom, forceEcrasement)
       return { data: { type: 'auto', resultat } }
     }
     toutesEvaluations.push(...evals)
@@ -374,7 +382,8 @@ export async function appliquerChoixGoogle(
       return { erreur: `Google Places Details ${res.status}: ${rawText.slice(0, 200)}` }
     }
     const place = (await res.json()) as GooglePlace
-    const resultat = await appliquerResultat(supabase, etablissementId, etab as EtatFiche, place, 'choix_manuel')
+    // Choix manuel utilisateur → force l'écrasement (l'user a explicitement choisi ce candidat)
+    const resultat = await appliquerResultat(supabase, etablissementId, etab as EtatFiche, place, 'choix_manuel', true)
     return { data: resultat }
   } catch (e) {
     return { erreur: e instanceof Error ? e.message : 'Erreur inconnue' }
