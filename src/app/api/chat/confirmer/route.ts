@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
           model: MODELES[modele],
           max_tokens: 4096,
           system: construireSystemePrompt(contexte ?? undefined),
-          tools: OUTILS_CLAUDE,
+          tools: [...OUTILS_CLAUDE, { type: 'web_search_20250305' as const, name: 'web_search' }],
           messages,
         }, { signal: abortCtrl.signal })
 

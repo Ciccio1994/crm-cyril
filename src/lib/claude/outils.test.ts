@@ -126,16 +126,21 @@ describe('SCHEMAS_OUTILS', () => {
 })
 
 describe('classification lecture / modification', () => {
-  it('les 6 outils sont classés', () => {
+  it('les 7 outils sont classés', () => {
     expect([...OUTILS_LECTURE, ...OUTILS_MODIFICATION].sort()).toEqual(
-      ['chercherEtablissements', 'creerRappel', 'creerVisite', 'lireVisites', 'mettreAJourEtablissement', 'mettreAJourHoraires'],
+      [
+        'chercherEtablissements', 'creerRappel', 'creerVisite',
+        'lireVisites', 'mettreAJourEtablissement', 'mettreAJourHoraires',
+        'rechercherViaGooglePlaces',
+      ],
     )
   })
 
-  it('OUTILS_LECTURE contient exactement lireVisites et chercherEtablissements', () => {
-    expect(OUTILS_LECTURE).toHaveLength(2)
+  it('OUTILS_LECTURE contient lireVisites, chercherEtablissements, rechercherViaGooglePlaces', () => {
+    expect(OUTILS_LECTURE).toHaveLength(3)
     expect(OUTILS_LECTURE).toContain('lireVisites')
     expect(OUTILS_LECTURE).toContain('chercherEtablissements')
+    expect(OUTILS_LECTURE).toContain('rechercherViaGooglePlaces')
   })
 
   it('OUTILS_MODIFICATION contient exactement les 4 outils de modification', () => {
@@ -144,5 +149,29 @@ describe('classification lecture / modification', () => {
     expect(OUTILS_MODIFICATION).toContain('creerVisite')
     expect(OUTILS_MODIFICATION).toContain('mettreAJourHoraires')
     expect(OUTILS_MODIFICATION).toContain('mettreAJourEtablissement')
+  })
+})
+
+describe('SCHEMAS_OUTILS — rechercherViaGooglePlaces', () => {
+  it('accepte un query valide', () => {
+    const r = SCHEMAS_OUTILS.rechercherViaGooglePlaces.safeParse({ query: 'Café Le Central Fully' })
+    expect(r.success).toBe(true)
+  })
+
+  it('refuse un query vide', () => {
+    const r = SCHEMAS_OUTILS.rechercherViaGooglePlaces.safeParse({ query: '' })
+    expect(r.success).toBe(false)
+  })
+
+  it('accepte ville optionnelle', () => {
+    const r = SCHEMAS_OUTILS.rechercherViaGooglePlaces.safeParse({
+      query: 'Le Dahu', ville: 'Verbier', limite: 5,
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('refuse limite > 5', () => {
+    const r = SCHEMAS_OUTILS.rechercherViaGooglePlaces.safeParse({ query: 'X', limite: 10 })
+    expect(r.success).toBe(false)
   })
 })

@@ -301,7 +301,17 @@ async function appliquerResultat(
     (forceEcrasement || etat.horaires_ouverture == null)
 
   const patch: Record<string, unknown> = {}
-  if (doitEcraserEnseigne) patch.enseigne = nouveauNom
+  if (doitEcraserEnseigne) {
+    patch.enseigne = nouveauNom
+    // Sauvegarde l'ancien nom dans notes_internes (utile : c'est souvent
+    // le nom du gérant, contact au téléphone). Dédup pour éviter les doublons
+    // si l'user re-enrichit plusieurs fois.
+    const ligne = `Ancien nom enseigne (avant enrichissement Google): ${etat.enseigne}`
+    const notesActuelles = etat.notes_internes ?? ''
+    if (!notesActuelles.includes(ligne)) {
+      patch.notes_internes = notesActuelles ? `${ligne}\n${notesActuelles}` : ligne
+    }
+  }
   if (doitEcrireHoraires) patch.horaires_ouverture = nouveauxHoraires
 
   if (Object.keys(patch).length > 0) {

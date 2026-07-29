@@ -4,9 +4,10 @@ import { z } from 'zod'
 export type NomOutil =
   | 'creerRappel' | 'creerVisite' | 'mettreAJourHoraires'
   | 'mettreAJourEtablissement' | 'lireVisites' | 'chercherEtablissements'
+  | 'rechercherViaGooglePlaces'
 
 // Outils "lecture" — exécutés automatiquement sans confirmation.
-export const OUTILS_LECTURE: NomOutil[] = ['lireVisites', 'chercherEtablissements']
+export const OUTILS_LECTURE: NomOutil[] = ['lireVisites', 'chercherEtablissements', 'rechercherViaGooglePlaces']
 
 // Outils "modification" — bufferisés, confirmation utilisateur obligatoire.
 export const OUTILS_MODIFICATION: NomOutil[] = [
@@ -58,6 +59,11 @@ export const SCHEMAS_OUTILS = {
   chercherEtablissements: z.object({
     requete: z.string().min(1).max(200),
     limite: z.number().int().min(1).max(50).default(20),
+  }),
+  rechercherViaGooglePlaces: z.object({
+    query: z.string().min(1).max(500),
+    ville: z.string().max(100).optional(),
+    limite: z.number().int().min(1).max(5).default(3),
   }),
 } as const
 
@@ -173,6 +179,23 @@ export const OUTILS_CLAUDE: Anthropic.Tool[] = [
         limite:  { type: 'number', description: 'Nombre max de résultats (défaut 20).' },
       },
       required: ['requete'],
+    },
+  },
+  {
+    name: 'rechercherViaGooglePlaces',
+    description:
+      "Recherche sur Google Maps un lieu public : nom, adresse, téléphone, horaires actuels, site web. " +
+      "Utilise cet outil quand Cyril demande des infos publiques à jour sur un établissement " +
+      "(horaires actuels, tel, adresse Google, site web, menu en ligne). " +
+      "Ne remplace pas les données du CRM — juste pour consulter/vérifier des infos externes.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Texte de recherche (ex "Café Le Central Fully" ou "Restaurant Verbier").' },
+        ville: { type: 'string', description: 'Ville pour préciser la recherche (optionnel).' },
+        limite: { type: 'number', description: 'Nombre max de résultats (défaut 3, max 5).' },
+      },
+      required: ['query'],
     },
   },
 ]

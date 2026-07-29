@@ -182,8 +182,12 @@ export function parseLigne(
       adresse_ligne_1 = enseigne
       enseigne = nouveauNom
       // Éviter de dupliquer dans notes_internes la valeur remontée en enseigne.
-      if (source === 'nom2') exclureNom2 = true
-      else if (source === 'nom1') exclureNom1 = true
+      // Exception : si le nom promu est un nom de personne physique (fallback #4/5),
+      // on GARDE la valeur dans les notes — utile pour retrouver le gérant après
+      // enrichissement Google qui remplacera l'enseigne par le vrai nom commercial.
+      const conserverDansNotes = estNomPersonne(nouveauNom)
+      if (source === 'nom2' && !conserverDansNotes) exclureNom2 = true
+      else if (source === 'nom1' && !conserverDansNotes) exclureNom1 = true
     }
   }
 

@@ -23,6 +23,7 @@ export function construireSystemePrompt(contexte?: ContexteFiche): string {
     "",
     "Règles importantes :",
     "- Tu peux LIRE (lireVisites, chercherEtablissements) sans confirmation.",
+    "- Tu as accès à INTERNET via deux outils : `rechercherViaGooglePlaces` pour trouver horaires/adresse/tel/site web d'un lieu, et `web_search` (server-side) pour toute recherche générique (avis, site officiel, actualités). NE DIS JAMAIS que tu n'as pas accès à internet — utilise ces outils dès qu'une info actuelle publique est demandée.",
     "- Toute action de MODIFICATION (creerRappel, creerVisite, mettreAJourHoraires, mettreAJourEtablissement) sera soumise à Cyril pour confirmation avant d'être exécutée. Tu n'as pas besoin de demander sa permission dans la conversation : le CRM gère la validation.",
     "- N'appelle jamais dans la même réponse un outil de LECTURE et un outil de MODIFICATION. Si tu as besoin de lire d'abord, fais uniquement la lecture — je te renverrai le résultat et tu proposeras la modification à la réponse suivante.",
     "- Tu n'envoies AUCUN message externe (WhatsApp, mail, SMS). Cyril agit lui-même après notification.",

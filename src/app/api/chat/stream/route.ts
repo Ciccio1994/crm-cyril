@@ -84,7 +84,8 @@ export async function POST(req: NextRequest) {
             model: MODELES[modele],
             max_tokens: 4096,
             system: construireSystemePrompt(contexte ?? undefined),
-            tools: OUTILS_CLAUDE,
+            // OUTILS_CLAUDE (custom) + web_search server-side (Anthropic-hosted)
+            tools: [...OUTILS_CLAUDE, { type: 'web_search_20250305' as const, name: 'web_search' }],
             messages,
           }, { signal: abortCtrl.signal })
 
@@ -101,6 +102,9 @@ export async function POST(req: NextRequest) {
           messages.push({ role: 'assistant', content: finalMsg.content })
 
           if (finalMsg.stop_reason === 'end_turn') break
+          // pause_turn : Anthropic a atteint sa limite de tool-use server-side
+          // (web_search). On re-boucle avec l'assistant response — le serveur reprend.
+          if (finalMsg.stop_reason === 'pause_turn') continue
 
           if (finalMsg.stop_reason !== 'tool_use') {
             send('erreur', {

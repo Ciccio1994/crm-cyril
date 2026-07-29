@@ -4,6 +4,8 @@ import { creerVisite } from '@/actions/visite'
 import { mettreAJourEtablissement, lireEtablissements } from '@/actions/etablissement'
 import { createClient } from '@/lib/supabase/server'
 import { correspondRecherche, normaliserRecherche } from '@/lib/etablissements/recherche'
+import { normaliserPourGoogle } from '@/lib/etablissements/telephone'
+import { parseGooglePeriods } from '@/lib/horaires/google-parser'
 
 export type ResultatOutil =
   | { ok: true;  contenu: string }
@@ -119,6 +121,55 @@ export async function executerOutil(
           code_schenk: e.code_schenk,
         }))
       return { ok: true, contenu: JSON.stringify(matches) }
+    }
+
+    case 'rechercherViaGooglePlaces': {
+      const p = SCHEMAS_OUTILS.rechercherViaGooglePlaces.safeParse(input)
+      if (!p.success) return { ok: false, erreur: p.error.issues.map(i => i.message).join(' — ') }
+      const key = process.env.GOOGLE_MAPS_API_KEY
+      if (!key) return { ok: false, erreur: 'GOOGLE_MAPS_API_KEY manquante côté serveur' }
+      const textQuery = normaliserPourGoogle(
+        [p.data.query, p.data.ville].filter((x): x is string => typeof x === 'string' && x.length > 0).join(' '),
+      )
+      try {
+        const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': key,
+            'X-Goog-FieldMask':
+              'places.id,places.displayName,places.formattedAddress,places.regularOpeningHours,places.nationalPhoneNumber,places.websiteUri',
+          },
+          body: JSON.stringify({
+            textQuery, regionCode: 'ch', languageCode: 'fr', pageSize: p.data.limite,
+          }),
+          cache: 'no-store',
+        })
+        if (!res.ok) {
+          const txt = await res.text()
+          return { ok: false, erreur: `Google Places ${res.status}: ${txt.slice(0, 200)}` }
+        }
+        const json = (await res.json()) as {
+          places?: Array<{
+            id?: string
+            displayName?: { text?: string }
+            formattedAddress?: string
+            regularOpeningHours?: { periods?: unknown[] }
+            nationalPhoneNumber?: string
+            websiteUri?: string
+          }>
+        }
+        const resultats = (json.places ?? []).map((pl) => ({
+          nom: pl.displayName?.text ?? '(sans nom)',
+          adresse: pl.formattedAddress ?? null,
+          telephone: pl.nationalPhoneNumber ?? null,
+          site_web: pl.websiteUri ?? null,
+          horaires: parseGooglePeriods(pl.regularOpeningHours?.periods as never) ?? null,
+        }))
+        return { ok: true, contenu: JSON.stringify(resultats) }
+      } catch (e) {
+        return { ok: false, erreur: e instanceof Error ? e.message : 'Erreur Google Places' }
+      }
     }
   }
 }
