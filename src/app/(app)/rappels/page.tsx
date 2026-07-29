@@ -1,13 +1,18 @@
-export default function RappelsPage() {
+import { lireRappels } from '@/actions/rappels'
+import { ListeRappels } from '@/components/rappels/liste-rappels'
+// import { BoutonNouveauRappel } from '@/components/rappels/bouton-nouveau-rappel' // TODO T3
+
+export const dynamic = 'force-dynamic'
+
+export default async function PageRappels() {
+  const rappels = await lireRappels()
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <span aria-hidden className="text-5xl">
-        ⏰
-      </span>
-      <h1 className="text-xl font-semibold">Rappels</h1>
-      <p className="text-sm text-muted-foreground">
-        Bientôt disponible en V1f.
-      </p>
+    <div className="flex flex-col gap-4 px-4 pb-24 pt-4">
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Rappels</h1>
+        {/* <BoutonNouveauRappel /> viendra en T3 */}
+      </header>
+      <ListeRappels rappelsInitiaux={rappels} />
     </div>
   )
 }

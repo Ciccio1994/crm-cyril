@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { BadgeNavRappels } from '@/components/rappels/badge-nav-rappels'
 
 interface NavItem {
   href: string
@@ -13,6 +14,7 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { href: '/',               label: "Aujourd'hui",    emoji: '📅' },
   { href: '/etablissements', label: 'Établissements', emoji: '🍷' },
+  { href: '/rappels',        label: 'Rappels',        emoji: '⏰' },
   { href: '/funnel',         label: 'Funnel',         emoji: '📊' },
   { href: '/chat',           label: 'Chat',           emoji: '💬' },
 ]
@@ -21,7 +23,7 @@ export function BottomNav() {
   const pathname = usePathname()
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-white safe-bottom">
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {ITEMS.map((item) => {
           const actif =
             item.href === '/'
@@ -36,8 +38,9 @@ export function BottomNav() {
                   actif ? 'text-foreground' : 'text-muted-foreground',
                 )}
               >
-                <span aria-hidden className="text-xl leading-none">
+                <span aria-hidden className="relative inline-block text-xl leading-none">
                   {item.emoji}
+                  {item.href === '/rappels' && <BadgeNavRappels />}
                 </span>
                 <span>{item.label}</span>
               </Link>

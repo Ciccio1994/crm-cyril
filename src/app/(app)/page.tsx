@@ -5,6 +5,7 @@ import { lireClientsEnRetard, lireSuggestionsProspection } from '@/actions/funne
 import { SuggestionsAujourdhui } from '@/components/home/suggestions-aujourdhui'
 import { WidgetObjectif } from '@/components/home/widget-objectif'
 import { WidgetOffresAccueil } from '@/components/offres/widget-offres-accueil'
+import { WidgetRappelsAujourdhui } from '@/components/rappels/widget-rappels-aujourdhui'
 import { lireEtablissementsDexie } from '@/lib/sync/lecture-dexie'
 import { hydraterTables } from '@/lib/sync/hydrate'
 import { useOnline } from '@/hooks/use-online'
@@ -69,6 +70,7 @@ export default function AccueilPage() {
           📴 Données locales — dernière synchronisation
         </p>
       )}
+      <WidgetRappelsAujourdhui />
       {online && <WidgetObjectif />}
       {online && <WidgetOffresAccueil />}
       {pret && (
