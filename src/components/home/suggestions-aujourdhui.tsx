@@ -3,7 +3,19 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ActionsRapidesVisite } from './actions-rapides-visite'
 import { calculerRetard } from '@/lib/retard'
+import { estOuvertMaintenant } from '@/lib/horaires/regles'
 import type { Etablissement } from '@/types/database'
+
+// Tri : ouvert maintenant (0) > horaires renseignés mais fermé (1) > pas d'horaires (2)
+function trierParOuverture(items: Etablissement[]): Etablissement[] {
+  const now = new Date().toISOString()
+  const score = (e: Etablissement): number => {
+    if (estOuvertMaintenant(e.horaires_ouverture, now)) return 0
+    if (e.horaires_ouverture) return 1
+    return 2
+  }
+  return [...items].sort((a, b) => score(a) - score(b))
+}
 
 interface Props {
   clients: Etablissement[]
@@ -58,8 +70,8 @@ function Bloc({ titre, items }: { titre: string; items: Etablissement[] }) {
 export function SuggestionsAujourdhui({ clients, prospects }: Props) {
   return (
     <div className="flex flex-col gap-6">
-      <Bloc titre="Clients à revoir en priorité" items={clients.slice(0, 10)} />
-      <Bloc titre="Prospects à démarcher" items={prospects.slice(0, 5)} />
+      <Bloc titre="Clients à revoir en priorité" items={trierParOuverture(clients).slice(0, 10)} />
+      <Bloc titre="Prospects à démarcher" items={trierParOuverture(prospects).slice(0, 5)} />
       {clients.length === 0 && prospects.length === 0 && (
         <p className="rounded-md border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
           Aucune suggestion pour aujourd&apos;hui. Bon travail !

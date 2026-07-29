@@ -14,6 +14,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { CarteEtablissement } from './carte-etablissement'
 import { cn } from '@/lib/utils'
 import { calculerRetard } from '@/lib/retard'
+import { estOuvertMaintenant } from '@/lib/horaires/regles'
 import type { Etablissement, StatutCommercial } from '@/types/database'
 
 interface ListeEtablissementsProps {
@@ -35,6 +36,7 @@ export function ListeEtablissements({ etablissements }: ListeEtablissementsProps
   const [recherche, setRecherche] = useState('')
   const [statut, setStatut] = useState<StatutCommercial | 'tous'>('tous')
   const [tourneeId, setTourneeId] = useState<string>('toutes')
+  const [ouvertMaintenant, setOuvertMaintenant] = useState(false)
 
   const tournees = useMemo(() => {
     const map = new Map<string, string>()
@@ -53,6 +55,7 @@ export function ListeEtablissements({ etablissements }: ListeEtablissementsProps
     return etablissements.filter((e) => {
       if (statut !== 'tous' && e.statut !== statut) return false
       if (tourneeId !== 'toutes' && e.tournee_id !== tourneeId) return false
+      if (ouvertMaintenant && !estOuvertMaintenant(e.horaires_ouverture)) return false
       if (q) {
         const combo = [e.enseigne, e.ville, e.code_postal]
           .filter(Boolean)
@@ -62,7 +65,7 @@ export function ListeEtablissements({ etablissements }: ListeEtablissementsProps
       }
       return true
     })
-  }, [etablissements, recherche, statut, tourneeId])
+  }, [etablissements, recherche, statut, tourneeId, ouvertMaintenant])
 
   return (
     <div className="flex flex-col">
@@ -114,6 +117,15 @@ export function ListeEtablissements({ etablissements }: ListeEtablissementsProps
             </SelectContent>
           </Select>
         </div>
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={ouvertMaintenant}
+            onChange={(e) => setOuvertMaintenant(e.target.checked)}
+            className="size-4"
+          />
+          🟢 Ouvert maintenant
+        </label>
       </header>
 
       <ul>
