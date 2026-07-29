@@ -9,15 +9,19 @@ import {
 } from '@/lib/horaires/regles'
 import { JOURS } from '@/types/horaires'
 import type { Horaires, JourSemaine } from '@/types/horaires'
+import { BoutonRecupererGoogle } from './bouton-recuperer-google'
 
 const LIBELLES: Record<JourSemaine, string> = {
   lundi: 'Lundi', mardi: 'Mardi', mercredi: 'Mercredi', jeudi: 'Jeudi',
   vendredi: 'Vendredi', samedi: 'Samedi', dimanche: 'Dimanche',
 }
 
-interface Props { horaires: Horaires | null }
+interface Props {
+  etablissementId: string
+  horaires: Horaires | null
+}
 
-export function SectionHoraires({ horaires }: Props) {
+export function SectionHoraires({ etablissementId, horaires }: Props) {
   const [now, setNow] = useState(() => new Date().toISOString())
 
   useEffect(() => {
@@ -25,7 +29,20 @@ export function SectionHoraires({ horaires }: Props) {
     return () => clearInterval(id)
   }, [])
 
-  if (!horaires || Object.keys(horaires).length === 0) return null
+  // Aucun horaire renseigné → afficher le bouton de récupération Google
+  if (!horaires || Object.keys(horaires).length === 0) {
+    return (
+      <Card className="space-y-3 p-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Horaires
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Aucun horaire renseigné pour cet établissement.
+        </p>
+        <BoutonRecupererGoogle etablissementId={etablissementId} />
+      </Card>
+    )
+  }
 
   const ouvert = estOuvertMaintenant(horaires, now)
   const prochaine = prochaineOuverture(horaires, now)

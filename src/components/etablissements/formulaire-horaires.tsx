@@ -1,9 +1,11 @@
 'use client'
 
+import { useRef, useState, useTransition } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { JOURS } from '@/types/horaires'
 import type { Horaires, JourSemaine } from '@/types/horaires'
+import { chercherHorairesGoogle } from '@/actions/horaires-google'
 
 const LIBELLES: Record<JourSemaine, string> = {
   lundi: 'Lundi', mardi: 'Mardi', mercredi: 'Mercredi', jeudi: 'Jeudi',
@@ -13,14 +15,49 @@ const LIBELLES: Record<JourSemaine, string> = {
 interface Props {
   value: Horaires | null
   onChange: (v: Horaires | null) => void
+  // Query pour recherche Google (enseigne + adresse concaténées).
+  // Si absent, le bouton "Auto-remplir depuis Google" est masqué.
+  requeteGoogle?: string
 }
+
+const DEBOUNCE_MS = 500
 
 function creneauVide(): { debut: string; fin: string } {
   return { debut: '', fin: '' }
 }
 
-export function FormulaireHoraires({ value, onChange }: Props) {
+export function FormulaireHoraires({ value, onChange, requeteGoogle }: Props) {
   const h = value ?? {}
+  const [pending, startTransition] = useTransition()
+  const [messageGoogle, setMessageGoogle] = useState<string | null>(null)
+  const dernierClickGoogleRef = useRef(0)
+
+  function autoRemplirDepuisGoogle() {
+    if (!requeteGoogle) return
+    const now = Date.now()
+    if (now - dernierClickGoogleRef.current < DEBOUNCE_MS) return
+    dernierClickGoogleRef.current = now
+
+    // Confirmation si des horaires existent déjà
+    if (value && Object.keys(value).length > 0) {
+      if (!window.confirm('Remplacer les horaires actuels par ceux trouvés sur Google Maps ?')) {
+        return
+      }
+    }
+
+    setMessageGoogle(null)
+    startTransition(async () => {
+      const r = await chercherHorairesGoogle(requeteGoogle)
+      if (r.erreur) {
+        setMessageGoogle(`❌ ${r.erreur}`)
+        return
+      }
+      if (r.data) {
+        onChange(r.data)
+        setMessageGoogle('Horaires trouvés ✅')
+      }
+    })
+  }
 
   function setJour(jour: JourSemaine, nouveau: Horaires[JourSemaine]) {
     const clone: Horaires = { ...h, [jour]: nouveau }
@@ -60,6 +97,28 @@ export function FormulaireHoraires({ value, onChange }: Props) {
 
   return (
     <div className="space-y-3">
+      {requeteGoogle && (
+        <div className="space-y-1">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={autoRemplirDepuisGoogle}
+            disabled={pending}
+            className="h-10 w-full text-sm"
+          >
+            {pending ? 'Recherche…' : '📍 Auto-remplir depuis Google Maps'}
+          </Button>
+          {messageGoogle && (
+            <p
+              className={`text-xs ${
+                messageGoogle.startsWith('❌') ? 'text-destructive' : 'text-emerald-600'
+              }`}
+            >
+              {messageGoogle}
+            </p>
+          )}
+        </div>
+      )}
       <Button
         type="button"
         variant="outline"

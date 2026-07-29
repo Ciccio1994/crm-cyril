@@ -168,7 +168,10 @@ export function FicheEtablissement({
               </p>
             </div>
           )}
-          <SectionHoraires horaires={etablissement.horaires_ouverture} />
+          <SectionHoraires
+            etablissementId={etablissement.id}
+            horaires={etablissement.horaires_ouverture}
+          />
           {offresActives.length > 0 && (
             <section className="space-y-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
