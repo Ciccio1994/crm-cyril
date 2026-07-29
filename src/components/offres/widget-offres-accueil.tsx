@@ -1,13 +1,30 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { lireOffresActives } from '@/actions/offres'
 import { joursAvantExpiration } from '@/lib/offres/regles'
+import type { Offre } from '@/types/database'
 
-export async function WidgetOffresAccueil() {
-  const r = await lireOffresActives()
-  const offres = r.data ?? []
-  if (offres.length === 0) return null
+export function WidgetOffresAccueil() {
+  const [offres, setOffres] = useState<Offre[]>([])
+  const [charge, setCharge] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    lireOffresActives().then((r) => {
+      if (cancelled) return
+      setOffres(r.data ?? [])
+      setCharge(true)
+    }).catch(() => setCharge(true))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!charge || offres.length === 0) return null
 
   const now = new Date().toISOString()
 

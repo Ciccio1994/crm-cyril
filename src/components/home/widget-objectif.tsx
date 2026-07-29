@@ -1,6 +1,9 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { lireObjectifDuJour } from '@/actions/objectif'
+import { lireObjectifDuJour, type ObjectifDuJour } from '@/actions/objectif'
 
 interface BarreProps {
   actuel: number
@@ -17,10 +20,22 @@ function Barre({ actuel, cible, couleur }: BarreProps) {
   )
 }
 
-export async function WidgetObjectif() {
-  const r = await lireObjectifDuJour()
-  if (r.erreur || !r.data) return null
-  const { compteur, seuils, atteint } = r.data
+export function WidgetObjectif() {
+  const [data, setData] = useState<ObjectifDuJour | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    lireObjectifDuJour().then((r) => {
+      if (cancelled) return
+      if (r.data) setData(r.data)
+    }).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!data) return null
+  const { compteur, seuils, atteint } = data
 
   return (
     <Card className="space-y-3 p-4">

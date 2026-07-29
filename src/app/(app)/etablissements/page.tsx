@@ -1,16 +1,57 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { lireEtablissements } from '@/actions/etablissement'
 import { ListeEtablissements } from '@/components/etablissements/liste-etablissements'
+import { lireEtablissementsDexie } from '@/lib/sync/lecture-dexie'
+import { hydraterTables } from '@/lib/sync/hydrate'
+import { useOnline } from '@/hooks/use-online'
+import type { Etablissement } from '@/types/database'
 
-export default async function EtablissementsPage() {
-  const { data, erreur } = await lireEtablissements()
+export default function EtablissementsPage() {
+  const online = useOnline()
+  const [data, setData] = useState<Etablissement[] | null>(null)
+  const [origineLocale, setOrigineLocale] = useState(false)
 
-  if (erreur) {
-    return (
-      <div className="p-6 text-sm text-destructive">
-        Erreur au chargement des établissements.
-      </div>
-    )
+  useEffect(() => {
+    let cancelled = false
+    async function charger() {
+      if (online) {
+        try {
+          const r = await lireEtablissements()
+          if (cancelled) return
+          if (r.data) {
+            setData(r.data)
+            setOrigineLocale(false)
+            hydraterTables({ etablissements: r.data }).catch(() => {})
+            return
+          }
+        } catch {
+          /* fallback Dexie */
+        }
+      }
+      const local = await lireEtablissementsDexie()
+      if (cancelled) return
+      setData(local)
+      setOrigineLocale(true)
+    }
+    charger()
+    return () => {
+      cancelled = true
+    }
+  }, [online])
+
+  if (!data) {
+    return <p className="p-6 text-sm text-muted-foreground">Chargement…</p>
   }
-
-  return <ListeEtablissements etablissements={data ?? []} />
+  return (
+    <>
+      {origineLocale && (
+        <p className="mx-4 mt-2 rounded-md border bg-muted/30 p-2 text-center text-xs text-muted-foreground">
+          📴 Données locales — dernière synchronisation
+        </p>
+      )}
+      <ListeEtablissements etablissements={data} />
+    </>
+  )
 }
