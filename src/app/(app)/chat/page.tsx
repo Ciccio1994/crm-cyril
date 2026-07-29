@@ -1,13 +1,36 @@
-export default function ChatPage() {
+import { redirect } from 'next/navigation'
+import { creerConversation, lireConversations } from '@/actions/chat'
+import { SidebarConversations } from '@/components/chat/sidebar-conversations'
+import { InterfaceChat } from '@/components/chat/interface-chat'
+
+export const dynamic = 'force-dynamic'
+
+export default async function PageChat({
+  searchParams,
+}: {
+  searchParams: Promise<{ c?: string; new?: string; etab?: string }>
+}) {
+  const params = await searchParams
+  let conversationId = params.c
+
+  if (params.new === '1' || !conversationId) {
+    const r = await creerConversation('haiku', params.etab ?? null)
+    if (r.data) {
+      redirect(`/chat?c=${r.data.id}${params.etab ? `&etab=${params.etab}` : ''}`)
+    }
+  }
+
+  const conversations = await lireConversations()
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <span aria-hidden className="text-5xl">
-        💬
-      </span>
-      <h1 className="text-xl font-semibold">Chat Claude</h1>
-      <p className="text-sm text-muted-foreground">
-        Bientôt disponible en V1f.
-      </p>
+    <div className="flex">
+      <SidebarConversations conversations={conversations} actifId={conversationId} />
+      <div className="flex-1">
+        <InterfaceChat
+          conversationId={conversationId!}
+          etablissementId={params.etab}
+          modeleInitial="haiku"
+        />
+      </div>
     </div>
   )
 }
