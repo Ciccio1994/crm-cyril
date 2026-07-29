@@ -8,15 +8,17 @@ import type {
   Zone,
   Offre,
 } from '@/types/database'
+import type { EntreeQueue } from '@/types/sync'
 
 export class CrmDatabase extends Dexie {
   etablissements!: Table<Etablissement>
-  contacts!: Table<Contact>
-  visites!: Table<Visite>
-  rappels!: Table<Rappel>
-  tournees!: Table<Tournee>
-  zones!: Table<Zone>
-  offres!: Table<Offre>
+  contacts!:       Table<Contact>
+  visites!:        Table<Visite>
+  rappels!:        Table<Rappel>
+  tournees!:       Table<Tournee>
+  zones!:          Table<Zone>
+  offres!:         Table<Offre>
+  sync_queue!:     Table<EntreeQueue>
 
   constructor() {
     super('crm-cyril')
@@ -28,6 +30,9 @@ export class CrmDatabase extends Dexie {
       tournees:       'id',
       zones:          'id, code',
       offres:         'id, date_fin, deleted_at',
+    })
+    this.version(2).stores({
+      sync_queue: '++id, statut, created_at, nom_action',
     })
   }
 }
