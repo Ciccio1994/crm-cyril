@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
     })
   }
   const { conversationId, message, imageUrl, etablissementId } = parsed.data
+  console.error('[Stream] POST reçu', { conversationId, message: message?.slice(0, 100), hasImage: !!imageUrl, etablissementId })
 
   const supabase = await createClient()
   const { data: conv } = await supabase
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
           // le volume "perçu" utilisateur — c'est normal (coût réel API).
           tokensIn += finalMsg.usage.input_tokens
           tokensOut += finalMsg.usage.output_tokens
+          console.error('[Stream] itération', iter, 'stop_reason:', finalMsg.stop_reason, 'tokens in/out:', finalMsg.usage.input_tokens, finalMsg.usage.output_tokens)
           messages.push({ role: 'assistant', content: finalMsg.content })
 
           if (finalMsg.stop_reason === 'end_turn') break
@@ -147,11 +149,13 @@ export async function POST(req: NextRequest) {
           // Tous les outils sont des lectures : exécute et continue la boucle
           const results: Anthropic.ToolResultBlockParam[] = []
           for (const t of toolUses) {
+            console.error('[Stream] executerOutil', t.name, 'input type:', typeof t.input, 'input:', JSON.stringify(t.input)?.slice(0, 200))
             const r = await executerOutil(
               t.name as NomOutil,
               t.input,
               conversationId,
             )
+            console.error('[Stream] résultat outil', t.name, 'ok:', r.ok, 'contenu type:', typeof (r.ok ? r.contenu : r.erreur), 'preview:', String(r.ok ? r.contenu : r.erreur).slice(0, 200))
             results.push({
               type: 'tool_result',
               tool_use_id: t.id,
@@ -163,6 +167,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Fin naturelle : persiste + titre auto fire-and-forget
+        console.error('[Stream] persist conversation, messages count:', messages.length, 'tokens cumul:', tokensIn, tokensOut)
         await supabase
           .from('conversation')
           .update({
@@ -172,6 +177,7 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', conversationId)
 
+        console.error('[Stream] avant ajouterConsommation modele:', modele, 'in:', tokensIn, 'out:', tokensOut)
         const monitoring = await ajouterConsommation(modele, tokensIn, tokensOut)
         send('monitoring', monitoring)
         void genererTitreConversation(conversationId).catch(() => {})
@@ -182,6 +188,14 @@ export async function POST(req: NextRequest) {
           controller.close()
           return
         }
+        console.error('[Stream] CATCH ERREUR', {
+          name: (e as Error)?.name,
+          message: (e as Error)?.message,
+          stack: (e as Error)?.stack,
+          typeof: typeof e,
+          string: String(e),
+          keys: e && typeof e === 'object' ? Object.keys(e as object) : null,
+        })
         send('erreur', { message: e instanceof Error ? e.message : 'Erreur inconnue' })
       } finally {
         controller.close()

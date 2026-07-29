@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
   }
   const body = parsed.data as { conversationId: string; etablissementId?: string; decisions: Array<{ tool_use_id: string; nom_outil: NomOutil; parametres: unknown; accepte: boolean }> }
 
+  console.error('[Confirmer] POST reçu', { conversationId: body.conversationId, etablissementId: body.etablissementId, decisionsCount: body.decisions.length, decisions: body.decisions.map(d => ({ tool_use_id: d.tool_use_id, nom_outil: d.nom_outil, accepte: d.accepte, parametres_type: typeof d.parametres })) })
+
   const supabase = await createClient()
   const { data: conv } = await supabase
     .from('conversation')
@@ -58,7 +60,9 @@ export async function POST(req: NextRequest) {
       })
       continue
     }
+    console.error('[Confirmer] executerOutil', d.nom_outil, 'parametres type:', typeof d.parametres, 'parametres:', JSON.stringify(d.parametres)?.slice(0, 200))
     const r = await executerOutil(d.nom_outil, d.parametres, body.conversationId)
+    console.error('[Confirmer] résultat outil', d.nom_outil, 'ok:', r.ok, 'contenu type:', typeof (r.ok ? r.contenu : r.erreur), 'preview:', String(r.ok ? r.contenu : r.erreur).slice(0, 200))
     results.push({
       type: 'tool_result',
       tool_use_id: d.tool_use_id,
@@ -119,6 +123,14 @@ export async function POST(req: NextRequest) {
           controller.close()
           return
         }
+        console.error('[Confirmer] CATCH ERREUR', {
+          name: (e as Error)?.name,
+          message: (e as Error)?.message,
+          stack: (e as Error)?.stack,
+          typeof: typeof e,
+          string: String(e),
+          keys: e && typeof e === 'object' ? Object.keys(e as object) : null,
+        })
         send('erreur', { message: e instanceof Error ? e.message : 'Erreur inconnue' })
       } finally {
         controller.close()

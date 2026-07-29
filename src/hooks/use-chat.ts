@@ -109,7 +109,13 @@ export function useChat(conversationId: string, etablissementId?: string) {
           let data: unknown
           try {
             data = JSON.parse(dataLine)
-          } catch {
+          } catch (err) {
+            console.error('[Chat] JSON.parse échec', {
+              dataLine_type: typeof dataLine,
+              dataLine_preview: String(dataLine).slice(0, 300),
+              erreur_message: (err as Error)?.message,
+              erreur_stack: (err as Error)?.stack,
+            })
             continue
           }
 
@@ -145,6 +151,12 @@ export function useChat(conversationId: string, etablissementId?: string) {
             }
             case 'erreur': {
               const e = data as { message: string }
+              console.error('[Chat] event erreur reçu du serveur', {
+                message_type: typeof e.message,
+                message: e.message,
+                message_stringified: String(e.message),
+                data_complete: data,
+              })
               setEtat((s) => ({ ...s, erreur: e.message, enCours: false }))
               break
             }
@@ -157,6 +169,13 @@ export function useChat(conversationId: string, etablissementId?: string) {
       }
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
+      console.error('[Chat] CATCH consommerSSE', {
+        name: (e as Error)?.name,
+        message: (e as Error)?.message,
+        stack: (e as Error)?.stack,
+        typeof: typeof e,
+        string: String(e),
+      })
       setEtat((s) => ({
         ...s,
         enCours: false,
